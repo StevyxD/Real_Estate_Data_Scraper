@@ -59,10 +59,9 @@ module Igr
     # Text up to the first stop token, cleaned; accepted only if it looks like
     # a name.
     def candidate(text)
-      name = text.to_s.split(STOP_RE, 2).first.to_s
-      name = name.sub(/\A(?:नं|क्र|no)\.?\s*/i, "")
-                 .sub(/\A\S{1,3}\s*-?\s*(?:विंग|wing)\s+/i, "") # drop a leading "B विंग"/"डी-विंग"
-                 .gsub(/\s+/, " ").strip
+      name = text.to_s.split(STOP_RE, 2).first.to_s.gsub(/\s+/, " ").strip
+      name = name.sub(/\A\S{1,3}\s*-?\s*(?:विंग|wing)\s+/i, "") # drop a leading "B विंग"/"डी-विंग"
+                 .strip
                  .sub(/[-–—:,;]+\z/, "").strip
       plausible?(name) ? name : nil
     end
