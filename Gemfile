@@ -42,6 +42,18 @@ gem "thruster", require: false
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
 gem "image_processing", "~> 1.2"
 
+# --- IGR scraper stack ---
+# Headless-Chrome automation for the freesearchigrservice.maharashtra.gov.in scraper
+gem "selenium-webdriver"
+# ImageMagick bindings for captcha image preprocessing (grayscale/normalize/upscale)
+gem "mini_magick"
+# Tesseract OCR wrapper for solving the hex captcha
+gem "rtesseract"
+# Pagination for the documents index. Pinned: v4x changed the API incompatibly.
+gem "pagy", "~> 9.3"
+# Claude (Anthropic) SDK — LLM fallback for Marathi building-name extraction
+gem "anthropic", "~> 1.1"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
@@ -64,5 +76,4 @@ end
 group :test do
   # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
   gem "capybara"
-  gem "selenium-webdriver"
 end

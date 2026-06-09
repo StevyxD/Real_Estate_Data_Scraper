@@ -22,6 +22,8 @@ default: &default
 
 development:
   <<: *default
+  # Single database in development: Solid Queue/Cache/Cable tables live in the
+  # primary DB alongside the app tables (see config/environments/development.rb).
   database: zapkey_development
 
   # The specified database role being used to connect to PostgreSQL.
