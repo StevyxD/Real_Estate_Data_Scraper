@@ -1,0 +1,37 @@
+<%= link_to document_path(document),
+      class: "group block overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-indigo-300 hover:shadow-md" do %>
+  <div class="h-1.5 bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500"></div>
+  <div class="p-4">
+    <div class="flex items-start justify-between gap-2">
+      <h3 class="line-clamp-2 font-semibold leading-snug text-slate-900"><%= document.display_title %></h3>
+      <% label, classes = doc_sale_type(document) %>
+      <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium <%= classes %>"><%= label %></span>
+    </div>
+    <p class="mt-0.5 text-xs text-slate-400">
+      <%= [document.property.village, document.pincode].reject(&:blank?).join(" · ").presence || "—" %>
+    </p>
+
+    <div class="mt-3 flex items-end justify-between">
+      <% price, price_label = headline_price(document) %>
+      <div>
+        <p class="text-xl font-bold text-slate-900"><%= inr_short(price) %></p>
+        <p class="text-[11px] text-slate-400"><%= price_label %></p>
+      </div>
+      <% if (rate = rate_per_sqft_label(document)) %>
+        <span class="text-xs font-medium text-slate-500"><%= rate %></span>
+      <% end %>
+    </div>
+
+    <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+      <div><dt class="text-slate-400">Area</dt><dd class="font-medium text-slate-700"><%= carpet_label(document) %></dd></div>
+      <div><dt class="text-slate-400">Registered</dt><dd class="font-medium text-slate-700"><%= document.registration_date&.strftime("%d %b %Y") || "—" %></dd></div>
+      <div><dt class="text-slate-400">Doc no</dt><dd class="font-medium text-slate-700"><%= document.doc_number %>/<%= document.property.year %></dd></div>
+      <div><dt class="text-slate-400">Floor</dt><dd class="font-medium text-slate-700"><%= document.floor.presence || "—" %></dd></div>
+    </dl>
+
+    <div class="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+      <p class="truncate"><span class="text-slate-400">Seller:</span> <%= party_summary(document.sellers) %></p>
+      <p class="truncate"><span class="text-slate-400">Buyer:</span> <%= party_summary(document.purchasers) %></p>
+    </div>
+  </div>
+<% end %>

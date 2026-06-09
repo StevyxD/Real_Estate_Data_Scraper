@@ -1,0 +1,80 @@
+<% content_for :title, "#{@document.display_title} · Zapkey" %>
+
+<%= link_to "← Back to registrations", documents_path, class: "text-sm font-medium text-indigo-600 hover:underline" %>
+
+<article class="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  <div class="h-2 bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500"></div>
+  <div class="p-6">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900"><%= @document.display_title %></h1>
+        <p class="mt-1 text-sm text-slate-500">
+          <%= [@document.property.village, @document.property.tahsil.presence, @document.property.district, @document.pincode].reject(&:blank?).join(" · ") %>
+        </p>
+      </div>
+      <% label, classes = doc_sale_type(@document) %>
+      <span class="rounded-full px-3 py-1 text-xs font-medium <%= classes %>"><%= label %></span>
+    </div>
+
+    <div class="mt-5 grid grid-cols-2 gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-4">
+      <% price, price_label = headline_price(@document) %>
+      <div>
+        <p class="text-xs text-slate-400"><%= price_label %></p>
+        <p class="text-lg font-bold text-slate-900"><%= inr_indian(price) %></p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-400">Market value</p>
+        <p class="text-lg font-semibold text-slate-700"><%= inr_indian(@document.market_value) %></p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-400">Carpet area</p>
+        <p class="text-lg font-semibold text-slate-700"><%= carpet_label(@document) %></p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-400">Rate</p>
+        <p class="text-lg font-semibold text-slate-700"><%= rate_per_sqft_label(@document) || "—" %></p>
+      </div>
+    </div>
+
+    <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <section>
+        <h2 class="text-sm font-semibold text-slate-900">Registration</h2>
+        <%= render "field", label: "Document no", value: "#{@document.doc_number}/#{@document.property.year}" %>
+        <%= render "field", label: "Type", value: @document.doc_type %>
+        <%= render "field", label: "Registered", value: @document.registration_date&.strftime("%d %b %Y") %>
+        <%= render "field", label: "Executed", value: @document.execution_date&.strftime("%d %b %Y") %>
+        <%= render "field", label: "Sub-registrar", value: [@document.sro_name, @document.sro_code].reject(&:blank?).join(" · ") %>
+      </section>
+
+      <section>
+        <h2 class="text-sm font-semibold text-slate-900">Charges</h2>
+        <%= render "field", label: "Stamp duty", value: inr_indian(@document.stamp_duty) %>
+        <%= render "field", label: "Registration fee", value: inr_indian(@document.registration_fee) %>
+      </section>
+
+      <section>
+        <h2 class="text-sm font-semibold text-slate-900">Property</h2>
+        <%= render "field", label: "Building / society", value: @document.building_name %>
+        <%= render "field", label: "Unit", value: @document.unit_no %>
+        <%= render "field", label: "Floor", value: @document.floor %>
+        <%= render "field", label: "Tower / wing", value: @document.tower_wing %>
+        <%= render "field", label: "CTS number", value: @document.cts_number %>
+      </section>
+
+      <section>
+        <h2 class="text-sm font-semibold text-slate-900">Parties</h2>
+        <%= render "field", label: "Seller(s)", value: @document.sellers.join("; ") %>
+        <%= render "field", label: "Seller PAN", value: @document.seller_pan %>
+        <%= render "field", label: "Purchaser(s)", value: @document.purchasers.join("; ") %>
+        <%= render "field", label: "Purchaser PAN", value: @document.purchaser_pan %>
+      </section>
+    </div>
+
+    <% if @document.property_description.present? %>
+      <section class="mt-6">
+        <h2 class="text-sm font-semibold text-slate-900">Description (मराठी)</h2>
+        <p class="mt-1 rounded-lg bg-slate-50 p-3 text-sm leading-relaxed text-slate-600"><%= @document.property_description %></p>
+      </section>
+    <% end %>
+  </div>
+</article>
