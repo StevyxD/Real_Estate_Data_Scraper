@@ -1,0 +1,55 @@
+<% content_for :title, "Search a property · Zapkey" %>
+
+<div class="mx-auto max-w-2xl">
+  <h1 class="text-xl font-bold tracking-tight text-slate-900">Search a Mumbai property</h1>
+  <p class="mt-1 text-sm text-slate-500">
+    Pick the year, district, village/area and property number. Submitting queues a
+    scrape on the <code class="rounded bg-slate-100 px-1">:scraping</code> queue —
+    run <code class="rounded bg-slate-100 px-1">bin/jobs</code> to start the worker.
+  </p>
+
+  <%= form_with url: search_path, method: :post, scope: :search,
+        data: {
+          controller: "dependent-select",
+          "dependent-select-map-value": Igr::Areas.map.to_json,
+          "dependent-select-selected-value": @search[:village]
+        },
+        class: "mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" do |f| %>
+    <div class="h-1.5 bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500"></div>
+
+    <div class="grid grid-cols-1 gap-5 p-6 sm:grid-cols-2">
+      <div>
+        <%= f.label :year, "सन / Year", class: "mb-1 block text-xs font-medium text-slate-500" %>
+        <%= f.select :year, options_for_select(@years, @search[:year]), {},
+              class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500" %>
+      </div>
+
+      <div>
+        <%= f.label :district, "जिल्हा / District", class: "mb-1 block text-xs font-medium text-slate-500" %>
+        <%= f.select :district,
+              options_for_select(Igr::Areas.districts.map { |d| [d, d] }, @search[:district]), {},
+              data: { "dependent-select-target": "district", action: "change->dependent-select#populate" },
+              class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500" %>
+      </div>
+
+      <div>
+        <%= f.label :village, "गाव निवडा / Select Village", class: "mb-1 block text-xs font-medium text-slate-500" %>
+        <%= f.select :village,
+              options_for_select([["----- Select Area -----", ""]] + Igr::Areas.areas_for(@search[:district]).map { |a| [a, a] }, @search[:village]), {},
+              data: { "dependent-select-target": "area" },
+              class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500" %>
+      </div>
+
+      <div>
+        <%= f.label :property_no, "मिळकत क्रमांक / Property No.", class: "mb-1 block text-xs font-medium text-slate-500" %>
+        <%= f.number_field :property_no, value: @search[:property_no], min: 1, placeholder: "Survey / CTS / Milkat / Gat / Plot no.",
+              class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500" %>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
+      <%= link_to "Cancel", documents_path, class: "text-sm font-medium text-slate-500 hover:text-slate-700" %>
+      <%= f.submit "शोध / Search & queue", class: "cursor-pointer rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" %>
+    </div>
+  <% end %>
+</div>

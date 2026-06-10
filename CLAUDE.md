@@ -28,6 +28,12 @@ bin/rails server                         # browse the cards at /
 Debug a single property synchronously (watch Chrome with `IGR_HEADED=1`):
 `IGR_PROPERTY_ID=123 rake igr:scrape_one`.
 
+The **`/search`** page (navbar "New search") is a UI form to queue a scrape: Year +
+District + Village (dependent `<select>`, Stimulus `dependent_select_controller`) +
+Property No. The District→Area options come from `config/igr_areas.yml` (generated
+from `Mumbai_Areas_District_List.xlsx`), loaded by `Igr::Areas`; submit
+find-or-creates a Mumbai `Property` and enqueues `ScrapePropertyJob`.
+
 Post-scrape building-name enrichment:
 `bin/rails runner script/backfill_building_name.rb` (regex), then
 `ANTHROPIC_API_KEY=… bin/rails runner script/backfill_building_name_llm.rb`.
