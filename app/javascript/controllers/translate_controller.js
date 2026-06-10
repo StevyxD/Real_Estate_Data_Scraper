@@ -1,8 +1,12 @@
 import { Controller } from "@hotwired/stimulus"
 
-// Toggles Google Translate between English (default) and Marathi by setting the
-// `googtrans` cookie and reloading. English = no cookie (original page); Marathi
-// = "/en/mr". The hidden Google widget (in the layout) applies the cookie on load.
+// Toggles Google Translate between English (default) and native Marathi.
+// The widget treats the page source as Marathi (pageLanguage: "mr"), so:
+//   /mr/en -> the Marathi data is translated to English (UI stays English)
+//   /mr/mr -> the original Marathi data (no translation)
+// The server sets /mr/en on first visit (ApplicationController), so English is
+// the default. We keep the cookie present (never empty) so that default doesn't
+// re-trigger after the user explicitly chooses Marathi.
 export default class extends Controller {
   static targets = ["label"]
 
@@ -11,16 +15,13 @@ export default class extends Controller {
   }
 
   toggle() {
-    if (this.current === "mr") {
-      this.clearCookie()
-    } else {
-      this.setCookie("/en/mr")
-    }
+    const next = this.current === "en" ? "mr" : "en"
+    this.setCookie(`/mr/${next}`)
     window.location.reload()
   }
 
   get current() {
-    const match = document.cookie.match(/(?:^|;\s*)googtrans=\/[^/]*\/([a-z-]+)/i)
+    const match = document.cookie.match(/googtrans=\/mr\/([a-z]+)/i)
     return match ? match[1].toLowerCase() : "en"
   }
 
@@ -29,16 +30,10 @@ export default class extends Controller {
     document.cookie = `googtrans=${value}; path=/; domain=${location.hostname}`
   }
 
-  clearCookie() {
-    const expired = "expires=Thu, 01 Jan 1970 00:00:00 GMT"
-    document.cookie = `googtrans=; path=/; ${expired}`
-    document.cookie = `googtrans=; path=/; domain=${location.hostname}; ${expired}`
-  }
-
   // Button shows the language you'll switch TO.
   render() {
     if (this.hasLabelTarget) {
-      this.labelTarget.textContent = this.current === "mr" ? "English" : "मराठी"
+      this.labelTarget.textContent = this.current === "en" ? "मराठी" : "English"
     }
   }
 }

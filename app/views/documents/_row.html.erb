@@ -9,10 +9,13 @@
     </div>
   </div>
 
-  <%# Type %>
-  <div class="hidden sm:col-span-2 sm:block">
+  <%# Type: category badge + the scraped document type (विलेखाचा प्रकार) %>
+  <div class="hidden min-w-0 sm:col-span-2 sm:block">
     <% label, classes = doc_sale_type(document) %>
     <span class="rounded-full px-2 py-0.5 text-[11px] font-medium <%= classes %>"><%= label %></span>
+    <% if document.doc_type.present? %>
+      <p class="mt-1 truncate text-xs text-slate-500" title="<%= document.doc_type %>"><%= document.doc_type %></p>
+    <% end %>
   </div>
 
   <%# Price %>
