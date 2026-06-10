@@ -18,7 +18,9 @@ class DashboardController < ApplicationController
 
     @recent_documents = Document.includes(:property).order(created_at: :desc).limit(8)
 
-    # Keep refreshing while anything is queued or running.
-    @auto_refresh = Property.active.exists?
+    # "Live" = something is actively scraping, or there's been queue activity in
+    # the last couple of minutes (so idle, long-queued rows don't keep refreshing).
+    @auto_refresh = Property.scraping.exists? ||
+                    Property.active.where(updated_at: 2.minutes.ago..).exists?
   end
 end
