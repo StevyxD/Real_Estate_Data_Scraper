@@ -1,22 +1,26 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title><%= content_for(:title) || "Zapkey" %></title>
+    <title><%= content_for(:title) || "RERA Easy" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="Zapkey">
+    <meta name="application-name" content="RERA Easy">
     <meta name="mobile-web-app-capable" content="yes">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
 
     <%= yield :head %>
 
-    <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
-    <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
-
     <link rel="icon" href="/icon.png" type="image/png">
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/icon.png">
+
+    <%# Hide the Google Translate banner/gadget — we drive it from a navbar button. %>
+    <style>
+      .goog-te-banner-frame, iframe.skiptranslate, #google_translate_element { display: none !important; }
+      body { top: 0 !important; }
+      .goog-text-highlight { background: none !important; box-shadow: none !important; }
+    </style>
 
     <%# Includes all stylesheet files in app/assets/stylesheets %>
     <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
@@ -26,9 +30,9 @@
   <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
     <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-        <%= link_to root_path, class: "flex items-center gap-2" do %>
-          <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 font-bold text-white">Z</span>
-          <span class="text-lg font-semibold tracking-tight">Zapkey</span>
+        <%= link_to root_path, class: "notranslate flex items-center gap-2" do %>
+          <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 text-xs font-bold text-white">RE</span>
+          <span class="text-lg font-semibold tracking-tight">RERA Easy</span>
         <% end %>
         <span class="hidden text-sm text-slate-400 sm:block">· Maharashtra property registrations</span>
 
@@ -37,8 +41,13 @@
                 class: "rounded-lg px-3 py-1.5 #{current_page?(documents_path) ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-900'}" %>
           <%= link_to "Dashboard", dashboard_path,
                 class: "rounded-lg px-3 py-1.5 #{current_page?(dashboard_path) ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-900'}" %>
-          <%= link_to "New search", search_path,
+          <%= link_to "Scraper", search_path,
                 class: "rounded-lg px-3 py-1.5 #{current_page?(search_path) ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-900'}" %>
+          <button type="button" data-controller="translate" data-action="translate#toggle"
+                  class="notranslate ml-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-slate-600 hover:bg-slate-50"
+                  title="Translate page">
+            🌐 <span data-translate-target="label">मराठी</span>
+          </button>
         </nav>
       </div>
     </header>
@@ -57,5 +66,17 @@
     <footer class="mx-auto max-w-6xl px-4 py-10 text-xs text-slate-400">
       Data scraped from freesearchigrservice.maharashtra.gov.in · for research use.
     </footer>
+
+    <%# Google Translate (hidden widget; toggled via the navbar button) %>
+    <div id="google_translate_element"></div>
+    <script>
+      function googleTranslateElementInit() {
+        new google.translate.TranslateElement(
+          { pageLanguage: "en", includedLanguages: "en,mr", autoDisplay: false },
+          "google_translate_element"
+        );
+      }
+    </script>
+    <script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async></script>
   </body>
 </html>
