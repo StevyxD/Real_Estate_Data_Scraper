@@ -1,11 +1,11 @@
 require "test_helper"
 
 class SearchesControllerTest < ActionDispatch::IntegrationTest
-  test "new renders the form with the dependent selects" do
+  test "new renders the form (district select + village text field)" do
     get search_path
     assert_response :success
     assert_select "select#search_district"
-    assert_select "select#search_village"
+    assert_select "input#search_village"
   end
 
   test "create queues a scrape for a valid Mumbai selection" do
@@ -21,10 +21,12 @@ class SearchesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to documents_path
   end
 
-  test "create rejects an area that does not belong to the district" do
+  test "create rejects a blank village or an unknown district" do
     assert_no_difference -> { Property.count } do
-      post search_path, params: { search: { year: 2026, district: "Mumbai City", village: "Bandra", property_no: 1 } }
+      post search_path, params: { search: { year: 2026, district: "Mumbai City", village: "", property_no: 1 } }
+      assert_response :unprocessable_entity
+      post search_path, params: { search: { year: 2026, district: "Nowhere", village: "Parel", property_no: 1 } }
+      assert_response :unprocessable_entity
     end
-    assert_response :unprocessable_entity
   end
 end

@@ -175,11 +175,21 @@ module Igr
       []
     end
 
+    # The IndexII control is an <input type="button" value="IndexII"
+    # onclick="__doPostBack('RegistrationGrid','indexII$<row_index>')"> in the
+    # last cell — NOT an anchor. Clicking it opens the सूची क्र.2 report in a new
+    # window (calling __doPostBack via execute_script throws a strict-mode error).
     def index_ii_link(row_index)
       rows = driver.find_elements(css: "#RegistrationGrid > tbody > tr")
       rows = driver.find_elements(css: "#RegistrationGrid tr") if rows.empty?
       tr = rows[row_index + 1] or return nil # row 0 is the header
-      tr.find_elements(css: "a").last
+
+      controls = tr.find_elements(css: "input[type='button'], a")
+      controls.find { |c| index_ii_label?(c) } || controls.last
+    end
+
+    def index_ii_label?(control)
+      [control.attribute("value"), control.text].any? { |t| t.to_s.strip.casecmp?("IndexII") }
     end
 
     # ---- helpers -----------------------------------------------------------

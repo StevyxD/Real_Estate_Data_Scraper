@@ -36,10 +36,22 @@ module Igr
 
     private
 
-    def from_label
-      m = @text.match(LABEL_RE) or return nil
+    # After an explicit "Building Name:" / "इमारतीचे नाव:" label, take the text up
+    # to the next address field (English or Marathi), preserving commas in a
+    # multi-part society name like "ISHAN APARTMENT, PRABODHAN SRA CHS LTD".
+    LABEL_STOP_RE = %r{,?\s*(?:flat\s*no|room\s*no|floor\s*no|wing|road|block|sector|
+                       landmark|plot\s*(?:no|number)|final\s*plot|pin\s*code|city|
+                       state|district|other\s*details)\b|[;]|\d{6}|
+                       प्लॉट|सेक्टर|मौजे|रोड|पिन}xi
 
-      candidate(@text[m.end(0)..])
+    def from_label
+      m = @raw.match(LABEL_RE) or return nil
+
+      name = @raw[m.end(0)..].to_s
+                 .split(LABEL_STOP_RE, 2).first.to_s
+                 .gsub(/\s+/, " ").strip
+                 .sub(/[,\-–—:;]+\z/, "").strip
+      plausible?(name) ? name : nil
     end
 
     def from_structure

@@ -8,14 +8,15 @@ class SearchesController < ApplicationController
 
   def create
     @search = search_params.to_h.symbolize_keys
+    village = @search[:village].to_s.strip
 
-    unless Igr::Areas.valid?(@search[:district], @search[:village])
-      return render_invalid("Pick a district and a village/area from the lists.")
+    unless Igr::Areas.districts.include?(@search[:district]) && village.present? && @search[:property_no].to_i.positive?
+      return render_invalid("Pick a district, and enter a village/area and a property number.")
     end
 
     property = Property.find_or_initialize_by(
       year: @search[:year].to_i, district: @search[:district], tahsil: "",
-      village: @search[:village], property_no: @search[:property_no].to_i
+      village: village, property_no: @search[:property_no].to_i
     )
     property.assign_attributes(search_status: "pending", enqueued_at: Time.current)
 

@@ -9,11 +9,6 @@
   </p>
 
   <%= form_with url: search_path, method: :post, scope: :search,
-        data: {
-          controller: "dependent-select",
-          "dependent-select-map-value": Igr::Areas.map.to_json,
-          "dependent-select-selected-value": @search[:village]
-        },
         class: "mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" do |f| %>
     <div class="h-1.5 bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500"></div>
 
@@ -28,15 +23,12 @@
         <%= f.label :district, "जिल्हा / District", class: "mb-1 block text-xs font-medium text-slate-500" %>
         <%= f.select :district,
               options_for_select(Igr::Areas.districts.map { |d| [d, d] }, @search[:district]), {},
-              data: { "dependent-select-target": "district", action: "change->dependent-select#populate" },
               class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500" %>
       </div>
 
       <div>
-        <%= f.label :village, "गाव निवडा / Select Village", class: "mb-1 block text-xs font-medium text-slate-500" %>
-        <%= f.select :village,
-              options_for_select([["----- Select Area -----", ""]] + Igr::Areas.areas_for(@search[:district]).map { |a| [a, a] }, @search[:village]), {},
-              data: { "dependent-select-target": "area" },
+        <%= f.label :village, "गावाचे नाव / Village (Area)", class: "mb-1 block text-xs font-medium text-slate-500" %>
+        <%= f.text_field :village, value: @search[:village], placeholder: "e.g. Parel",
               class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500" %>
       </div>
 

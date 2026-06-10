@@ -27,11 +27,12 @@ module Igr
     def fill_form(property)
       select_value("ddlFromYear", property.year.to_s)
       select_value("ddlDistrict", district_value(property))
+      sleep 2 # ddlDistrict fires an AutoPostBack (__doPostBack) — let it settle
+      dismiss_popup
 
-      # Type the village, then blur so ddlareaname autopopulates.
+      # Type the village, blur so ddlareaname autopopulates, then pick + verify.
       type_into("txtAreaName", property.village)
       blur("txtAreaName")
-      wait_for_options("ddlareaname")
       select_village(property.village)
 
       type_into("txtAttributeValue", property.property_no.to_s)
@@ -44,26 +45,64 @@ module Igr
       end
     end
 
-    # Pick the village option whose text matches; fall back to the first real one.
+    # Pick the village in ddlareaname and VERIFY the selection stuck. The dropdown
+    # is filled by an async autocomplete after txtAreaName blurs, so the option
+    # can appear late and a first click can race with a repopulation — hence the
+    # poll + verify + retry. If the value never leaves the "-----Select Area----"
+    # placeholder, btnSearch's required-field validator fails (Page_IsValid=false)
+    # and the search is silently aborted (no postback, empty grid).
     def select_village(village)
+      wanted = village.to_s.strip
+      deadline = monotonic + 20
+
+      loop do
+        value = try_select_village(wanted)
+        return value if value
+
+        break if monotonic > deadline
+
+        sleep 0.5
+      end
+
+      raise Selenium::WebDriver::Error::NoSuchElementError,
+            "could not select village #{wanted.inspect} in ddlareaname (got #{areaname_value.inspect})"
+    end
+
+    # One attempt: select the matching option via Select#select_by (clicking the
+    # <option> directly is unreliable in headless Chrome), then read back the
+    # select's value. Returns the value if it stuck (not the placeholder), else nil.
+    def try_select_village(wanted)
       with_retry do
         select = Selenium::WebDriver::Support::Select.new(driver.find_element(id: "ddlareaname"))
-        match = select.options.find { |o| o.text.to_s.strip.casecmp?(village.to_s.strip) }
-        (match || select.options.find { |o| o.attribute("value").to_s != "" }).click
+        option = select.options.find { |o| o.text.to_s.strip.casecmp?(wanted) } ||
+                 select.options.find { |o| real_option?(o) }
+        return nil unless option
+
+        select.select_by(:text, option.text)
       end
+      sleep 0.2
+      value = areaname_value
+      real_value?(value) ? value : nil
+    rescue Selenium::WebDriver::Error::WebDriverError
+      nil
+    end
+
+    def areaname_value
+      driver.find_element(id: "ddlareaname").attribute("value").to_s.strip
+    rescue Selenium::WebDriver::Error::WebDriverError
+      ""
+    end
+
+    def real_value?(value)
+      !value.to_s.strip.empty? && !/select area/i.match?(value.to_s)
+    end
+
+    def real_option?(option)
+      option.attribute("value").to_s.strip != "" && !/select area/i.match?(option.text.to_s)
     end
 
     def blur(id)
       driver.execute_script("document.getElementById(arguments[0]).blur();", id)
-    end
-
-    # ddlareaname is empty until the AutoPostBack fills it.
-    def wait_for_options(id, timeout: 15)
-      wait(timeout:).until do
-        driver.find_elements(css: "##{id} option").size > 1
-      end
-    rescue Selenium::WebDriver::Error::TimeoutError
-      nil
     end
   end
 end
