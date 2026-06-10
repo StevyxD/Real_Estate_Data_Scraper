@@ -1,0 +1,37 @@
+<%= link_to document_path(document),
+      class: "grid grid-cols-12 items-center gap-3 border-b border-slate-100 px-4 py-2.5 last:border-0 hover:bg-indigo-50/40" do %>
+  <%# Property: title + village %>
+  <div class="col-span-8 flex min-w-0 items-center gap-2.5 sm:col-span-4">
+    <span class="hidden h-7 w-1 shrink-0 rounded bg-gradient-to-b from-indigo-500 to-fuchsia-500 sm:block"></span>
+    <div class="min-w-0">
+      <p class="truncate text-sm font-semibold text-slate-900"><%= document.display_title %></p>
+      <p class="truncate text-xs text-slate-400"><%= [document.property.village, document.pincode].reject(&:blank?).join(" · ").presence || "—" %></p>
+    </div>
+  </div>
+
+  <%# Type %>
+  <div class="hidden sm:col-span-2 sm:block">
+    <% label, classes = doc_sale_type(document) %>
+    <span class="rounded-full px-2 py-0.5 text-[11px] font-medium <%= classes %>"><%= label %></span>
+  </div>
+
+  <%# Price %>
+  <div class="col-span-4 text-right sm:col-span-2">
+    <% price, = headline_price(document) %>
+    <p class="text-sm font-bold text-slate-900"><%= inr_short(price) %></p>
+  </div>
+
+  <%# ₹/sqft %>
+  <div class="hidden text-xs text-slate-500 sm:col-span-1 sm:block">
+    <%= document.rate_per_sqft ? "₹#{number_with_delimiter(document.rate_per_sqft)}" : "—" %>
+  </div>
+
+  <%# Area %>
+  <div class="hidden text-xs text-slate-500 sm:col-span-1 sm:block"><%= carpet_label(document) %></div>
+
+  <%# Registered + doc no %>
+  <div class="hidden text-xs text-slate-500 sm:col-span-2 sm:block">
+    <%= document.registration_date&.strftime("%d %b %Y") || "—" %>
+    <span class="block text-[11px] text-slate-400">#<%= document.doc_number %>/<%= document.property.year %></span>
+  </div>
+<% end %>

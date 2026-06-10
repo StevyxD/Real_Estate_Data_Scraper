@@ -31,8 +31,16 @@
 </div>
 
 <% if @documents.any? %>
-  <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    <%= render partial: "card", collection: @documents, as: :document %>
+  <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div class="hidden grid-cols-12 gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-slate-400 sm:grid">
+      <div class="col-span-4">Property</div>
+      <div class="col-span-2">Type</div>
+      <div class="col-span-2 text-right">Price</div>
+      <div class="col-span-1">₹/sqft</div>
+      <div class="col-span-1">Area</div>
+      <div class="col-span-2">Registered</div>
+    </div>
+    <%= render partial: "row", collection: @documents, as: :document %>
   </div>
   <%= render "pagination" %>
 <% else %>
