@@ -33,6 +33,34 @@ module ApplicationHelper
     "₹#{head},#{digits[-3..]}"
   end
 
+  # search_status -> badge label + tailwind classes (+ a live dot for "scraping").
+  PROPERTY_STATUS = {
+    "scraping" => { label: "Scraping",   classes: "bg-blue-50 text-blue-700 ring-1 ring-blue-600/20",     live: true },
+    "pending"  => { label: "Queued",     classes: "bg-slate-100 text-slate-600 ring-1 ring-slate-500/20" },
+    "found"    => { label: "Scraped",    classes: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20" },
+    "empty"    => { label: "No records", classes: "bg-amber-50 text-amber-700 ring-1 ring-amber-600/20" },
+    "error"    => { label: "Failed",     classes: "bg-rose-50 text-rose-700 ring-1 ring-rose-600/20" }
+  }.freeze
+
+  def property_status(property)
+    PROPERTY_STATUS.fetch(property.search_status, PROPERTY_STATUS["pending"])
+  end
+
+  def property_status_badge(property)
+    status = property_status(property)
+    dot = if status[:live]
+      tag.span("", class: "mr-1 inline-block h-1.5 w-1.5 animate-ping rounded-full bg-blue-500")
+    else
+      "".html_safe
+    end
+    tag.span(safe_join([dot, status[:label]]),
+             class: "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium #{status[:classes]}")
+  end
+
+  def ago(time)
+    time ? "#{time_ago_in_words(time)} ago" : "—"
+  end
+
   private
 
   # Round to 2 decimals and drop trailing zeros: 1.61 -> "1.61", 2.0 -> "2".

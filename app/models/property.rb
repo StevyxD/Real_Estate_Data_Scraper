@@ -8,8 +8,13 @@
 class Property < ApplicationRecord
   has_many :documents, dependent: :destroy
 
+  # pending  -> queued, not started
+  # scraping -> a worker is actively scraping it right now (in progress)
+  # found    -> scraped, documents retrieved
+  # empty    -> ran fine, the site has no records for it
+  # error    -> the scrape raised (failed)
   enum :search_status,
-       { pending: "pending", found: "found", empty: "empty", error: "error" },
+       { pending: "pending", scraping: "scraping", found: "found", empty: "empty", error: "error" },
        default: "pending"
 
   validates :year, :district, :village, :property_no, presence: true
@@ -19,7 +24,9 @@ class Property < ApplicationRecord
                           message: "is already queued for this village/year" }
 
   # Rows the scraper is allowed to (re)attempt.
-  scope :scrapable, -> { where(search_status: %w[pending error]) }
+  scope :scrapable,  -> { where(search_status: %w[pending error]) }
+  scope :active,     -> { where(search_status: %w[pending scraping]) }
+  scope :finished,   -> { where(search_status: %w[found empty error]) }
   scope :for_village, ->(v) { where(village: v) }
 
   def mumbai?
@@ -32,6 +39,11 @@ class Property < ApplicationRecord
     parts << "Tahsil: #{tahsil}" if tahsil.present?
     parts << district
     "#{parts.join(' / ')} ##{property_no} (#{year})"
+  end
+
+  # Mark that a worker has started scraping this property (in progress).
+  def mark_scraping!
+    update!(search_status: "scraping", error_message: nil)
   end
 
   # Record a terminal outcome for this search attempt.

@@ -22,8 +22,8 @@ class SearchesController < ApplicationController
 
     if property.save
       ScrapePropertyJob.perform_later(property.id)
-      redirect_to documents_path,
-                  notice: "Queued #{property.label} for scraping. Start the worker with `bin/jobs`."
+      redirect_to dashboard_path,
+                  notice: "Queued #{property.label} for scraping. Run `bin/jobs` to start the worker — watch progress below."
     else
       render_invalid(property.errors.full_messages.to_sentence)
     end

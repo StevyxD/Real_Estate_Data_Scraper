@@ -18,7 +18,7 @@ class SearchesControllerTest < ActionDispatch::IntegrationTest
     property = Property.find_by!(village: "Parel", property_no: 4242)
     assert property.pending?
     assert_equal "", property.tahsil
-    assert_redirected_to documents_path
+    assert_redirected_to dashboard_path
   end
 
   test "create rejects a blank village or an unknown district" do

@@ -1,0 +1,103 @@
+<% content_for :title, "Dashboard · Zapkey" %>
+
+<% if @auto_refresh %>
+  <% content_for :head do %><meta http-equiv="refresh" content="4"><% end %>
+<% end %>
+
+<div class="flex items-center justify-between">
+  <div class="flex items-center gap-2">
+    <h1 class="text-xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+    <% if @auto_refresh %>
+      <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+        <span class="inline-block h-1.5 w-1.5 animate-ping rounded-full bg-blue-500"></span> live
+      </span>
+    <% end %>
+  </div>
+  <%= link_to "New search", search_path, class: "rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700" %>
+</div>
+
+<!-- status counts -->
+<div class="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-5">
+  <% DashboardController::STATUS_ORDER.each do |status| %>
+    <% meta = ApplicationHelper::PROPERTY_STATUS[status] %>
+    <div class="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm">
+      <p class="text-2xl font-bold text-slate-900"><%= @counts[status].to_i %></p>
+      <p class="mt-0.5 text-xs text-slate-500"><%= meta[:label] %></p>
+    </div>
+  <% end %>
+</div>
+
+<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+  <!-- active scrapes -->
+  <section class="rounded-xl border border-slate-200 bg-white shadow-sm">
+    <h2 class="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Scrape activity</h2>
+    <% if @active.any? %>
+      <ul class="divide-y divide-slate-100">
+        <% @active.each do |property| %>
+          <li class="flex items-center justify-between gap-3 px-4 py-3">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-slate-800"><%= property.village %> #<%= property.property_no %> · <%= property.year %></p>
+              <p class="text-xs text-slate-400"><%= property.district %> · <%= ago(property.updated_at) %></p>
+            </div>
+            <%= property_status_badge(property) %>
+          </li>
+        <% end %>
+      </ul>
+    <% else %>
+      <p class="px-4 py-8 text-center text-sm text-slate-400">
+        Nothing queued. <%= link_to "Start a search", search_path, class: "font-medium text-indigo-600 hover:underline" %>, then run <code class="rounded bg-slate-100 px-1">bin/jobs</code>.
+      </p>
+    <% end %>
+  </section>
+
+  <!-- recently finished -->
+  <section class="rounded-xl border border-slate-200 bg-white shadow-sm">
+    <h2 class="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Recently finished</h2>
+    <% if @recent.any? %>
+      <ul class="divide-y divide-slate-100">
+        <% @recent.each do |property| %>
+          <li class="flex items-center justify-between gap-3 px-4 py-3">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-slate-800">
+                <%= link_to "#{property.village} ##{property.property_no} · #{property.year}", documents_path(village: property.village), class: "hover:text-indigo-600" %>
+              </p>
+              <p class="truncate text-xs text-slate-400">
+                <% if property.found? %><%= property.docs_count %> document<%= "s" unless property.docs_count == 1 %>
+                <% elsif property.error? %><span class="text-rose-500"><%= property.error_message.to_s.truncate(60) %></span>
+                <% else %>no records<% end %> · <%= ago(property.scraped_at) %>
+              </p>
+            </div>
+            <%= property_status_badge(property) %>
+          </li>
+        <% end %>
+      </ul>
+    <% else %>
+      <p class="px-4 py-8 text-center text-sm text-slate-400">No finished scrapes yet.</p>
+    <% end %>
+  </section>
+</div>
+
+<!-- recently scraped documents -->
+<section class="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm">
+  <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+    <h2 class="text-sm font-semibold text-slate-900">Recently scraped documents</h2>
+    <%= link_to "View all →", documents_path, class: "text-xs font-medium text-indigo-600 hover:underline" %>
+  </div>
+  <% if @recent_documents.any? %>
+    <ul class="divide-y divide-slate-100">
+      <% @recent_documents.each do |document| %>
+        <li>
+          <%= link_to document_path(document), class: "flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" do %>
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-slate-800"><%= document.display_title %></p>
+              <p class="truncate text-xs text-slate-400"><%= [document.property.village, "#{document.doc_number}/#{document.property.year}", document.doc_type].reject(&:blank?).join(" · ") %></p>
+            </div>
+            <span class="shrink-0 text-sm font-semibold text-slate-700"><%= inr_short(headline_price(document).first) %></span>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+  <% else %>
+    <p class="px-4 py-8 text-center text-sm text-slate-400">No documents scraped yet.</p>
+  <% end %>
+</section>

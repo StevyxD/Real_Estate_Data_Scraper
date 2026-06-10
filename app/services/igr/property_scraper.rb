@@ -16,6 +16,8 @@ module Igr
     end
 
     def call
+      @property.mark_scraping! # in progress — visible on the dashboard
+
       session = session_for(@property)
       result  = session.run(@property)
       @property.captcha_attempts = result.attempts

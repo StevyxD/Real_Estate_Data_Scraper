@@ -11,6 +11,9 @@ Rails.application.routes.draw do
 
   resources :documents, only: %i[index show]
 
+  # Live scrape activity + recently scraped documents.
+  get "dashboard", to: "dashboard#index", as: :dashboard
+
   # Mumbai property search → queues a scrape.
   get  "search", to: "searches#new",    as: :search
   post "search", to: "searches#create"

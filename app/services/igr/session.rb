@@ -32,6 +32,7 @@ module Igr
     # same results page; the caller MUST call #close afterwards (PropertyScraper
     # does this in an ensure block).
     def run(property, max_attempts: EMPTY_CONFIRMATIONS * 2)
+      @property = property
       start_browser
       open_search
       fill_form(property) # subclass: fill the form ONCE
@@ -118,6 +119,7 @@ module Igr
 
       max_attempts.times do
         attempt += 1
+        ensure_search_form # recover if the site bounced us to the landing page
         guess = solve_captcha
         logger.info("[igr] attempt #{attempt}: captcha=#{guess.inspect}")
 
@@ -132,6 +134,19 @@ module Igr
       end
 
       Result.new(status: :empty, rows: [], attempts: attempt)
+    end
+
+    # The site occasionally bounces back to the landing page after a submit
+    # (losing the Mumbai form, so btnSearch/imgCaptcha disappear). When that
+    # happens we MUST re-open and re-fill the form — but ONLY then; re-filling an
+    # intact form corrupts its ViewState and makes correct captchas return empty.
+    def ensure_search_form
+      return if driver.find_elements(id: submit_button_id).any? &&
+                driver.find_elements(id: captcha_image_id).any?
+
+      logger.info("[igr] search form lost (bounced to landing) — reopening")
+      open_search
+      fill_form(@property)
     end
 
     def solve_captcha
@@ -153,12 +168,14 @@ module Igr
     end
 
     def submit_search(guess)
+      # Fill + click together under the retry: an in-flight postback can briefly
+      # remove btnSearch from the DOM, so the click must retry on stale/missing too.
       with_retry do
         field = driver.find_element(id: captcha_input_id)
         field.clear
         field.send_keys(guess)
+        js_click(driver.find_element(id: submit_button_id))
       end
-      js_click(driver.find_element(id: submit_button_id))
     end
 
     # Poll for the async UpdatePanel postback. Both "wrong captcha" and "no
