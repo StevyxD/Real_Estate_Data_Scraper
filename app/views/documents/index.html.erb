@@ -1,6 +1,9 @@
 <% content_for :title, "Property registrations · RERA Easy" %>
 
 <%= form_with url: documents_path, method: :get do |f| %>
+  <%# Keep the chosen project number when only sort/search changes (cleared if the
+      village dropdown is switched — handled in the controller). %>
+  <%= hidden_field_tag :property_id, @property&.id if @property %>
   <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
     <div class="flex-1">
       <label class="mb-1 block text-xs font-medium text-slate-500">Search</label>
@@ -22,8 +25,32 @@
   </div>
 <% end %>
 
+<% if @village.present? && @properties.any? %>
+  <div class="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <p class="mb-2 text-xs font-medium text-slate-500">
+      Project numbers in <span class="font-semibold text-slate-700"><%= @village %></span>
+      <span class="text-slate-400">· <%= @properties.size %> with documents</span>
+    </p>
+    <div class="flex flex-wrap gap-2">
+      <%= link_to "All", documents_path(village: @village, q: @query.presence, sort: @sort),
+            class: "rounded-full border px-3 py-1 text-xs font-medium #{@property.nil? ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400'}" %>
+      <% @properties.each do |prop| %>
+        <% active = @property&.id == prop.id %>
+        <%= link_to documents_path(property_id: prop.id, q: @query.presence, sort: @sort),
+              class: "rounded-full border px-3 py-1 text-xs font-medium #{active ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400'}" do %>
+          #<%= prop.property_no %>
+          <span class="<%= active ? 'text-indigo-100' : 'text-slate-400' %>">(<%= prop.docs_count %>)</span>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
 <div class="mt-5 flex items-baseline justify-between">
   <p class="text-sm text-slate-500">
+    <% if @property %>
+      <span class="font-semibold text-slate-900"><%= @property.village %> #<%= @property.property_no %> · <%= @property.year %></span> —
+    <% end %>
     <span class="font-semibold text-slate-900"><%= number_with_delimiter(@pagy.count) %></span>
     registration<%= "s" unless @pagy.count == 1 %>
     <% if @total_value.to_f.positive? %>· total <span class="font-medium text-slate-700"><%= inr_short(@total_value) %></span><% end %>

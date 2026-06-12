@@ -18,6 +18,21 @@ class Igr::BuildingNameTest < ActiveSupport::TestCase
     assert_equal "सत्यम सूर्या मॅनहॅटन", call(desc)
   end
 
+  test "labelled name stops at a trailing Marathi विंग token" do
+    desc = "इमारतीचे नाव: रागुवंशी मिल कंपाऊंड,विंग बी,प्रथमेश बिल्डिंग, ब्लॉक नं: लोवर परेल,मुंबई 400013"
+    assert_equal "रागुवंशी मिल कंपाऊंड", call(desc)
+  end
+
+  test "labelled name keeps a hyphen-attached wing but stops at ब्लॉक" do
+    desc = "इमारतीचे नाव: अशोक टॉवर्स बी-विंग, ब्लॉक नं: परेल,मुम्बई 400012"
+    assert_equal "अशोक टॉवर्स बी-विंग", call(desc)
+  end
+
+  test "labelled name keeps विंग्स as part of the society name" do
+    desc = "इमारतीचे नाव: सोयूझ कॉम्प्लेक्स ए.बी.सी. अँड डी. विंग्स सी.एच.एस, ब्लॉक नं: चेंबूर"
+    assert_equal "सोयूझ कॉम्प्लेक्स ए.बी.सी. अँड डी. विंग्स सी.एच.एस", call(desc)
+  end
+
   test "nil for a plot-only sale (no unit or floor)" do
     assert_nil call("प्लॉट नं 49,सेक्टर 15,खारघर,नवी मुंबई")
   end

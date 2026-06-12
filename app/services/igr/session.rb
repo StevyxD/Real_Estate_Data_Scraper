@@ -120,6 +120,7 @@ module Igr
       max_attempts.times do
         attempt += 1
         ensure_search_form # recover if the site bounced us to the landing page
+        prepare_attempt    # subclass hook: re-assert wiped fields + refresh captcha
         guess = solve_captcha
         logger.info("[igr] attempt #{attempt}: captcha=#{guess.inspect}")
 
@@ -147,6 +148,24 @@ module Igr
       logger.info("[igr] search form lost (bounced to landing) — reopening")
       open_search
       fill_form(@property)
+    end
+
+    # Hook run before each captcha solve+submit attempt. Default no-op (Mumbai);
+    # RestMaharashtraSession uses it to re-assert the property number (wiped by the
+    # dropdown-cascade postback) and force a fresh, in-sync captcha image.
+    def prepare_attempt; end
+
+    # Block until the ASP.NET AJAX UpdatePanel finishes its async postback, so a
+    # still-in-flight cascade postback can't clobber fields we set next.
+    def wait_idle(timeout: 15)
+      wait(timeout:).until do
+        driver.execute_script(
+          "try { return !Sys.WebForms.PageRequestManager.getInstance().get_isInAsyncPostBack(); } " \
+          "catch (e) { return true; }"
+        )
+      end
+    rescue Selenium::WebDriver::Error::TimeoutError
+      nil
     end
 
     def solve_captcha

@@ -1,7 +1,9 @@
 <% content_for :title, "Dashboard · RERA Easy" %>
 
 <% if @auto_refresh %>
-  <% content_for :head do %><meta http-equiv="refresh" content="4"><% end %>
+  <%# Live auto-refresh, scoped to this page — the timer is torn down when you
+      navigate away (unlike a <meta refresh>, which lingers under Turbo). %>
+  <div data-controller="auto-refresh" data-auto-refresh-interval-value="4000" class="hidden"></div>
 <% end %>
 
 <div class="flex items-center justify-between">
@@ -59,7 +61,12 @@
           <li class="flex items-center justify-between gap-3 px-4 py-3">
             <div class="min-w-0">
               <p class="truncate text-sm font-medium text-slate-800">
-                <%= link_to "#{property.village} ##{property.property_no} · #{property.year}", documents_path(village: property.village), class: "hover:text-indigo-600" %>
+                <% label = "#{property.village} ##{property.property_no} · #{property.year}" %>
+                <% if property.found? %>
+                  <%= link_to label, documents_path(property_id: property.id), class: "hover:text-indigo-600" %>
+                <% else %>
+                  <span class="text-slate-500"><%= label %></span>
+                <% end %>
               </p>
               <p class="truncate text-xs text-slate-400">
                 <% if property.found? %><%= property.docs_count %> document<%= "s" unless property.docs_count == 1 %>

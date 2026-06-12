@@ -42,7 +42,7 @@ module Igr
     LABEL_STOP_RE = %r{,?\s*(?:flat\s*no|room\s*no|floor\s*no|wing|road|block|sector|
                        landmark|plot\s*(?:no|number)|final\s*plot|pin\s*code|city|
                        state|district|other\s*details)\b|[;]|\d{6}|
-                       प्लॉट|सेक्टर|मौजे|रोड|पिन}xi
+                       [,\s](?:विंग|वींग)(?=[\s,]|\z)|ब्लॉक|प्लॉट|सेक्टर|मौजे|रोड|पिन}xi
 
     def from_label
       m = @raw.match(LABEL_RE) or return nil

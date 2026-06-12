@@ -62,13 +62,32 @@ Post-scrape building-name enrichment:
 - **Captcha is 6-char HEXADECIMAL** (0-9 A-F). Restrict Tesseract to that
   whitelist — biggest accuracy lever. Grayscale+normalize+upscale only; do NOT
   `-threshold` (hollows the glyphs). The answer is not leakable; OCR is required.
-- **No feedback on a wrong captcha** — silent regenerate. "Entered Correct
-  Captcha" label is a RED HERRING. Wrong captcha and "no records" both leave the
-  grid empty → submit up to `EMPTY_CONFIRMATIONS` (5) times before trusting :empty.
-- **CRITICAL FLOW**: fill the form ONCE, then loop solve→submit on the SAME page.
-  Each submit is an ASP.NET postback that regenerates the captcha and preserves
-  the form via ViewState. Re-filling/reloading between attempts corrupts the form
-  so even a correct captcha returns empty.
+- **No feedback on a wrong captcha** — silent. The green "Entered Correct
+  Captcha" label is a CONFIRMED RED HERRING: it renders `true` even when you
+  submit a deliberately wrong captcha (e.g. `000000`). Wrong captcha and "no
+  records" both leave the grid empty → trust :empty only after several
+  fresh-captcha attempts all come back empty.
+- **The captcha image is STATIC per page load** — it does NOT regenerate on
+  postback (same `Handler.ashx?txt=…` token, same pixels). The earlier belief
+  that "each submit regenerates the captcha" was WRONG and caused every scrape to
+  false-empty. To retry, you need a genuinely fresh captcha (see refresh below).
+- **Rest-of-Maharashtra gotchas that silently zero out results** (each verified
+  June 2026, all three required together — fixed in `RestMaharashtraSession`):
+  1. **Captcha desync** — the District→Tahsil→Village cascade desyncs the
+     server-side captcha value from the displayed (cached) image, so a correct
+     read of the stale image is rejected → empty. FIX: force a fresh `Handler.ashx`
+     GET (`img.src = base + '?txt=' + random`) right before solving so the shown
+     image matches the server's current value.
+  2. **Property number wiped** — the village dropdown's async postback re-renders
+     and BLANKS `txtAttributeValue1`; if you typed the number before it settles,
+     the search POSTs an empty property number → zero rows. FIX: `wait_idle`
+     (PageRequestManager not in async postback), THEN set the number; re-assert it
+     before every attempt.
+  3. **Search won't fire from a click** — neither a synthetic `.click()` nor a
+     native Selenium click triggers the search postback. FIX: fire it the way the
+     site's own dropdowns do — `setTimeout("__doPostBack('btnSearch_RestMaha','')", 0)`
+     (a setTimeout'd STRING runs in global non-strict scope, dodging the
+     strict-mode "arguments" error that breaks a direct `__doPostBack` call).
 - Results load via async UpdatePanel postback (~5-8s) → POLL (`RESULT_TIMEOUT` 12s).
 - Chrome needs `--disable-dev-shm-usage` or the headless tab crashes on results.
 - Intro popup (`div#popup`, close `a.btnclose`) overlays every load AND postback.
