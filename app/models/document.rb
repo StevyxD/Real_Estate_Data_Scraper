@@ -31,6 +31,7 @@ class Document < ApplicationRecord
   ].freeze
 
   before_save :infer_pincode_from_village
+  before_save :build_search_key
 
   scope :enriched,   -> { where(index_ii_fetched: true) }
   scope :with_price, -> { where.not(consideration_amount: [nil, 0]) }
@@ -97,5 +98,10 @@ class Document < ApplicationRecord
     return if pincode.present?
 
     self.pincode = VILLAGE_PINCODES[property&.village]
+  end
+
+  # English-friendly phonetic index of the searchable text (see Igr::SearchKey).
+  def build_search_key
+    self.search_key = Igr::SearchKey.for_document(self)
   end
 end

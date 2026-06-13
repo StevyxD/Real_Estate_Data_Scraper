@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_09_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_13_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -37,6 +37,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_09_120000) do
     t.jsonb "raw", default: {}
     t.date "registration_date"
     t.decimal "registration_fee", precision: 15, scale: 2
+    t.text "search_key"
     t.text "seller_names"
     t.string "seller_pan"
     t.string "sro_code"

@@ -26,21 +26,56 @@
 <% end %>
 
 <% if @village.present? && @properties.any? %>
+  <% chip = ->(active) { "rounded-full border px-3 py-1 text-xs font-medium #{active ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400'}" } %>
+  <% arrow = "flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 hover:border-indigo-400" %>
   <div class="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-    <p class="mb-2 text-xs font-medium text-slate-500">
-      Project numbers in <span class="font-semibold text-slate-700"><%= @village %></span>
-      <span class="text-slate-400">· <%= @properties.size %> with documents</span>
-    </p>
-    <div class="flex flex-wrap gap-2">
-      <%= link_to "All", documents_path(village: @village, q: @query.presence, sort: @sort),
-            class: "rounded-full border px-3 py-1 text-xs font-medium #{@property.nil? ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400'}" %>
-      <% @properties.each do |prop| %>
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <p class="text-xs font-medium text-slate-500">
+        Project numbers in <span class="font-semibold text-slate-700"><%= @village %></span>
+        <span class="text-slate-400">· <%= @properties.size %> with documents</span>
+      </p>
+      <% if @property_groups.size > 1 %>
+        <label class="flex items-center gap-2 text-xs text-slate-500">
+          Jump to
+          <select data-controller="select-navigate" data-action="change->select-navigate#go"
+                  class="rounded-lg border border-slate-300 px-2 py-1 text-xs focus:border-indigo-500 focus:ring-indigo-500">
+            <% @property_groups.each do |from| %>
+              <%= tag.option "#{from}–#{from + 9}",
+                    value: documents_path(village: @village, num_from: from, property_id: @property&.id, q: @query.presence, sort: @sort),
+                    selected: from == @num_from %>
+            <% end %>
+          </select>
+        </label>
+      <% end %>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <%= link_to "All", documents_path(village: @village, num_from: @num_from, q: @query.presence, sort: @sort),
+            class: chip.call(@property.nil?) %>
+
+      <span class="mx-1 h-5 w-px bg-slate-200"></span>
+
+      <% if @prev_from %>
+        <%= link_to "‹", documents_path(village: @village, num_from: @prev_from, property_id: @property&.id, q: @query.presence, sort: @sort),
+              class: arrow, "aria-label": "Previous group" %>
+      <% else %>
+        <span class="<%= arrow %> cursor-not-allowed opacity-40">‹</span>
+      <% end %>
+
+      <% @window_properties.each do |prop| %>
         <% active = @property&.id == prop.id %>
-        <%= link_to documents_path(property_id: prop.id, q: @query.presence, sort: @sort),
-              class: "rounded-full border px-3 py-1 text-xs font-medium #{active ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400'}" do %>
+        <%= link_to documents_path(property_id: prop.id, num_from: @num_from, q: @query.presence, sort: @sort),
+              class: chip.call(active) do %>
           #<%= prop.property_no %>
           <span class="<%= active ? 'text-indigo-100' : 'text-slate-400' %>">(<%= prop.docs_count %>)</span>
         <% end %>
+      <% end %>
+
+      <% if @next_from %>
+        <%= link_to "›", documents_path(village: @village, num_from: @next_from, property_id: @property&.id, q: @query.presence, sort: @sort),
+              class: arrow, "aria-label": "Next group" %>
+      <% else %>
+        <span class="<%= arrow %> cursor-not-allowed opacity-40">›</span>
       <% end %>
     </div>
   </div>
