@@ -1,0 +1,52 @@
+<% content_for :title, "Kharghar scraper · RERA Easy" %>
+
+<div class="mx-auto max-w-2xl">
+  <h1 class="text-xl font-bold tracking-tight text-slate-900">Scrape Kharghar properties</h1>
+  <p class="mt-1 text-sm text-slate-500">
+    Enter a year and a property-number range. District, tahsil and village are set
+    automatically to <span class="font-medium text-slate-700">Raigad / Panvel / Kharghar</span>.
+    Every property number from <em>From</em> to <em>To</em> is queued on the
+    <code class="rounded bg-slate-100 px-1">:scraping</code> queue — run
+    <code class="rounded bg-slate-100 px-1">bin/jobs</code> to start the worker.
+    Each property is scraped in full (all document pages).
+  </p>
+
+  <%= form_with url: kharghar_scrape_path, method: :post, scope: :kharghar,
+        class: "mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" do |f| %>
+    <div class="h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500"></div>
+
+    <div class="grid grid-cols-1 gap-5 p-6 sm:grid-cols-3">
+      <div>
+        <%= f.label :year, "सन / Year", class: "mb-1 block text-xs font-medium text-slate-500" %>
+        <%= f.select :year, options_for_select(@years, @form[:year]), {},
+              class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" %>
+      </div>
+
+      <div>
+        <%= f.label :from_no, "पासून / From property no.", class: "mb-1 block text-xs font-medium text-slate-500" %>
+        <%= f.number_field :from_no, value: @form[:from_no], min: 1, placeholder: "e.g. 1",
+              class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" %>
+      </div>
+
+      <div>
+        <%= f.label :to_no, "पर्यंत / To property no.", class: "mb-1 block text-xs font-medium text-slate-500" %>
+        <%= f.number_field :to_no, value: @form[:to_no], min: 1, placeholder: "e.g. 100",
+              class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" %>
+      </div>
+    </div>
+
+    <div class="border-t border-slate-100 bg-slate-50 px-6 py-3">
+      <dl class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+        <div><dt class="inline font-medium text-slate-400">District:</dt> <dd class="inline">Raigad</dd></div>
+        <div><dt class="inline font-medium text-slate-400">Tahsil:</dt> <dd class="inline">Panvel</dd></div>
+        <div><dt class="inline font-medium text-slate-400">Village:</dt> <dd class="inline">Kharghar</dd></div>
+        <div><dt class="inline font-medium text-slate-400">Max per submit:</dt> <dd class="inline"><%= KhargharScrapesController::MAX_RANGE %></dd></div>
+      </dl>
+    </div>
+
+    <div class="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+      <%= link_to "Cancel", documents_path, class: "text-sm font-medium text-slate-500 hover:text-slate-700" %>
+      <%= f.submit "रांगेत लावा / Queue range", class: "cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700" %>
+    </div>
+  <% end %>
+</div>

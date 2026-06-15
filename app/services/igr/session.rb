@@ -16,7 +16,9 @@ module Igr
 
     EMPTY_CONFIRMATIONS = 5  # blank grids (with a valid-length guess) to trust :empty
     RESULT_TIMEOUT      = 12 # seconds to poll for the async grid postback
+    PAGE_NAV_TIMEOUT    = 25 # seconds for a Page$N postback to re-render (portal is slow)
     PAGE_TIMEOUT        = 45
+    MAX_PAGES           = 200 # runaway guard for the results-grid page walk
 
     Result = Struct.new(:status, :rows, :attempts, keyword_init: true)
 
@@ -72,7 +74,88 @@ module Igr
       nil
     end
 
+    # Walk every page of the results grid for the current property, yielding the
+    # parsed rows of each page (and its 1-based page number) with that page LIVE
+    # in the DOM, so the caller can drive IndexII enrichment on it before we move
+    # on. Page 1 is the rows solve_and_submit already found (passed in, so we do
+    # NOT re-parse and race the async render); pages 2..N are reached by firing
+    # the GridView's Page$N postback.
+    #
+    # We stop ONLY when the pager itself no longer lists a higher page number —
+    # never because a page was slow to load. The slow portal is handled by
+    # go_to_page, which re-fires and waits (up to 3 × PAGE_NAV_TIMEOUT) for the
+    # next page to actually render. This is the fix for the old "stops at 10 docs"
+    # bug, where a momentary empty/slow grid was misread as "no more pages".
+    def each_result_page(first_rows = nil)
+      rows = first_rows.presence || Igr::ResultParser.parse(driver.page_source)
+      return if rows.blank?
+
+      yield rows, 1
+      target = pager_target
+      logger.info("[igr] page 1: #{rows.size} rows, pager target=#{target.inspect}")
+      return unless target # single page
+
+      prev_first = rows.first.attrs[:doc_number]
+      page = 1
+      while page < MAX_PAGES
+        # Deterministic end-of-pages: the pager only links to a number greater
+        # than the current page while more pages remain. Don't infer the end from
+        # a render timeout (a slow page would be mistaken for the last one).
+        break unless Igr::ResultParser.pager_pages(driver.page_source).any? { |n| n > page }
+
+        page += 1
+        rows = go_to_page(target, page, prev_first)
+        if rows.blank? || rows.first.attrs[:doc_number] == prev_first
+          logger.warn("[igr] page #{page}: expected (pager lists it) but it did not load — stopping")
+          break
+        end
+
+        logger.info("[igr] page #{page}: #{rows.size} rows (first=#{rows.first.attrs[:doc_number]})")
+        prev_first = rows.first.attrs[:doc_number]
+        yield rows, page
+      end
+    end
+
     private
+
+    # The GridView's pager-postback target ('RegistrationGrid'), or nil for a
+    # genuine single-page grid. Retries briefly: right after results land the DOM
+    # can still be mid-render, and reading too early would mistake a paged grid
+    # for a single page and skip pages 2..N.
+    def pager_target(tries: 6)
+      tries.times do
+        target = Igr::ResultParser.pager_target(driver.page_source)
+        return target if target
+
+        sleep 0.3
+      end
+      nil
+    end
+
+    # Fire the GridView's Page$N postback and wait for the grid to re-render with
+    # a new first row. Uses a setTimeout'd STRING so __doPostBack runs in global
+    # non-strict scope (a direct call throws the strict-mode "arguments" error on
+    # this site — same dodge as btnSearch_RestMaha). The caller has already
+    # confirmed the page exists, so re-fire a few times: the portal is slow and a
+    # single postback can be dropped or render past one wait window. Returns the
+    # rows once the page advances, else the last parse.
+    def go_to_page(target, number, prev_first, fires: 3)
+      fires.times do
+        driver.execute_script(%(setTimeout("__doPostBack('#{target}','Page$#{number}')", 0);))
+        wait_idle
+
+        deadline = monotonic + PAGE_NAV_TIMEOUT
+        loop do
+          dismiss_popup
+          rows = Igr::ResultParser.parse(driver.page_source)
+          return rows if rows.any? && rows.first.attrs[:doc_number] != prev_first
+          break if monotonic > deadline
+
+          sleep 0.5
+        end
+      end
+      Igr::ResultParser.parse(driver.page_source)
+    end
 
     # ---- subclass contract -------------------------------------------------
     def captcha_image_id = raise(NotImplementedError)

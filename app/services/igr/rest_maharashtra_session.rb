@@ -29,11 +29,22 @@ module Igr
     def captcha_input_id = "txtImg1"
     def submit_button_id = "btnSearch_RestMaha"
 
+    # Reveal the "other district" form, then WAIT for it to actually render. The
+    # tab loads its fields asynchronously and the portal is often slow, so a bare
+    # click + immediate fill_form races ahead and throws NoSuchElement on
+    # ddlFromYear1. Wait for the year dropdown to populate; re-click once if the
+    # first click didn't take (popup intercept / dropped postback).
     def open_tab
-      js_click(wait.until { driver.find_element(id: TAB_BUTTON) })
+      2.times do
+        js_click(wait.until { driver.find_element(id: TAB_BUTTON) })
+        return if wait_for_options("ddlFromYear1", timeout: 25)
+
+        dismiss_popup
+      end
     end
 
     def fill_form(property)
+      wait_for_options("ddlFromYear1", timeout: 25) # slow portal: ensure the form is up
       select_value("ddlFromYear1", property.year.to_s)
 
       select_value("ddlDistrict1", lookup(DISTRICT_VALUES, property.district, "district"))

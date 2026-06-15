@@ -27,6 +27,28 @@ module Igr
     # (__doPostBack('RegistrationGrid','indexII$<row_index>')).
     Row = Struct.new(:row_index, :attrs, :raw, keyword_init: true)
 
+    # The GridView pager renders its page numbers as anchors whose href is
+    # javascript:__doPostBack('<grid-unique-id>','Page$<n>'). Return that target
+    # id (so the session can fire Page$N itself), or nil when the grid is a single
+    # page (no pager links).
+    PAGER_RE      = /__doPostBack\(\s*['"]([^'"]+)['"]\s*,\s*['"]Page\$\d+['"]/
+    PAGER_PAGE_RE = /__doPostBack\(\s*['"][^'"]+['"]\s*,\s*['"]Page\$(\d+)['"]/
+
+    def self.pager_target(html)
+      source = html.is_a?(Nokogiri::XML::Node) ? html.to_html : html.to_s
+      source[PAGER_RE, 1]
+    end
+
+    # Every page number the pager currently links to (the numbered links of the
+    # visible block plus the "..." forward/back jumps, which are themselves Page$N
+    # links). The KEY use: the last page links only to EARLIER pages, so
+    # "any number greater than the current page" is a reliable has-next-page test
+    # — far more robust than inferring the end from a render timeout.
+    def self.pager_pages(html)
+      source = html.is_a?(Nokogiri::XML::Node) ? html.to_html : html.to_s
+      source.scan(PAGER_PAGE_RE).flatten.map(&:to_i).uniq.sort
+    end
+
     def self.parse(html)
       new(html).parse
     end

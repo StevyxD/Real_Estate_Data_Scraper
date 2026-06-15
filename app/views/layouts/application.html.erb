@@ -43,6 +43,8 @@
                 class: "rounded-lg px-3 py-1.5 #{current_page?(dashboard_path) ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-900'}" %>
           <%= link_to "Scraper", search_path,
                 class: "rounded-lg px-3 py-1.5 #{current_page?(search_path) ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-900'}" %>
+          <%= link_to "Kharghar", kharghar_scrape_path,
+                class: "rounded-lg px-3 py-1.5 #{current_page?(kharghar_scrape_path) ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-900'}" %>
           <button type="button" data-controller="translate" data-action="translate#toggle"
                   class="notranslate ml-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-slate-600 hover:bg-slate-50"
                   title="Translate page">

@@ -60,6 +60,51 @@ namespace :igr do
     puts "Enqueued #{count} pending/error properties. Run `bin/jobs`."
   end
 
+  desc "Re-scrape a village's properties with full pagination; stop after " \
+       "IGR_MAX_FAILS (default 5) consecutive empty/error properties " \
+       "(IGR_VILLAGE=Kharghar, IGR_LIMIT=N to cap count, IGR_HEADED=1 to watch Chrome)"
+  task rescrape: :environment do
+    village  = ENV.fetch("IGR_VILLAGE", "Kharghar")
+    max_fail = IgrRake.int_env("IGR_MAX_FAILS", 5)
+    scope    = Property.where(village:).order(:property_no) # every status
+    scope    = scope.limit(IgrRake.int_env("IGR_LIMIT", 0)) if ENV["IGR_LIMIT"].present?
+
+    puts "Re-scraping #{scope.count} #{village} properties (stop after #{max_fail} consecutive empty/error)."
+    consecutive = 0
+
+    # .each (not find_each): the scope is small (≤ a few hundred) and find_each
+    # would ignore our property_no ordering and the IGR_LIMIT cap.
+    scope.each do |property|
+      before = property.documents.count
+      begin
+        result = Igr::PropertyScraper.call(property, headless: ENV["IGR_HEADED"] != "1")
+        after  = property.documents.count
+
+        if result.status == :found
+          consecutive = 0
+          puts "##{property.property_no}: #{before} -> #{after} docs (#{result.attempts} attempts)"
+        else
+          consecutive += 1
+          puts "##{property.property_no}: #{result.status} [consecutive fails: #{consecutive}/#{max_fail}]"
+        end
+      rescue StandardError => e
+        consecutive += 1
+        puts "##{property.property_no}: ERROR #{e.class}: #{e.message} [consecutive: #{consecutive}/#{max_fail}]"
+      end
+
+      if consecutive >= max_fail
+        puts "STOP: #{max_fail} consecutive empty/error properties — the site is likely blocking us."
+        break
+      end
+    end
+  end
+
+  desc "Re-scrape ALL Kharghar properties with full pagination (stop after 5 consecutive empty/error)"
+  task rescrape_kharghar: :environment do
+    ENV["IGR_VILLAGE"] = "Kharghar"
+    Rake::Task["igr:rescrape"].invoke
+  end
+
   desc "Scrape one property synchronously for debugging (IGR_PROPERTY_ID=123, IGR_HEADED=1 to show Chrome)"
   task scrape_one: :environment do
     property = Property.find(ENV.fetch("IGR_PROPERTY_ID"))

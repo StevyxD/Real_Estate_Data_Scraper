@@ -18,6 +18,10 @@ Rails.application.routes.draw do
   get  "search", to: "searches#new",    as: :search
   post "search", to: "searches#create"
 
+  # Kharghar bulk range → queues a scrape for every property no. in [from..to].
+  get  "kharghar", to: "kharghar_scrapes#new",    as: :kharghar_scrape
+  post "kharghar", to: "kharghar_scrapes#create"
+
   # Defines the root path route ("/")
   root "documents#index"
 end

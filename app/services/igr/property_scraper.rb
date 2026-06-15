@@ -23,7 +23,10 @@ module Igr
       @property.captcha_attempts = result.attempts
 
       if result.status == :found
-        persist(result.rows, session)
+        # Walk every page of the grid (not just the first 10 rows), persisting
+        # and enriching each page while it is live in the DOM. Page 1 is the rows
+        # the search already found; pages 2..N come from the GridView pager.
+        session.each_result_page(result.rows) { |rows, _page| persist(rows, session) }
         @property.mark!(:found)
       else
         @property.mark!(:empty)
