@@ -26,6 +26,19 @@ class KhargharScrapesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to dashboard_path
   end
 
+  test "create with a blank To queues just the single From property" do
+    assert_difference -> { Property.count }, 1 do
+      assert_enqueued_jobs 1, only: ScrapePropertyJob do
+        post kharghar_scrape_path, params: { kharghar: { year: 2026, from_no: 5, to_no: "" } }
+      end
+    end
+
+    prop = Property.find_by!(village: "Kharghar", year: 2026, property_no: 5)
+    assert prop.pending?
+    assert_equal "Panvel", prop.tahsil
+    assert_redirected_to dashboard_path
+  end
+
   test "create re-queues an already-found property so it gets re-scraped in full" do
     existing = Property.create!(year: 2026, district: "Raigad", tahsil: "Panvel",
                                 village: "Kharghar", property_no: 50, search_status: "found")

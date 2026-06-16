@@ -23,7 +23,8 @@ class KhargharScrapesController < ApplicationController
     @form = form_params.to_h.symbolize_keys
     year  = @form[:year].to_i
     from  = @form[:from_no].to_i
-    to    = @form[:to_no].to_i
+    # "To" is optional — blank means a single property (just "From").
+    to    = @form[:to_no].present? ? @form[:to_no].to_i : from
 
     if (message = validate(year, from, to))
       return render_invalid(message)
@@ -40,8 +41,8 @@ class KhargharScrapesController < ApplicationController
 
   def validate(year, from, to)
     return "Pick a valid year." unless YEARS.include?(year)
-    return "Enter From and To property numbers (1 or greater)." unless from.positive? && to.positive?
-    return "From property no. can't be greater than To." if from > to
+    return "Enter a From property number (1 or greater)." unless from.positive?
+    return "To property no. can't be less than From." if to < from
     if (to - from + 1) > MAX_RANGE
       return "That's #{to - from + 1} properties — max #{MAX_RANGE} per submit. Split it into smaller ranges."
     end

@@ -3,9 +3,10 @@
 <div class="mx-auto max-w-2xl">
   <h1 class="text-xl font-bold tracking-tight text-slate-900">Scrape Kharghar properties</h1>
   <p class="mt-1 text-sm text-slate-500">
-    Enter a year and a property-number range. District, tahsil and village are set
+    Enter a year and a property number (or a range). District, tahsil and village are set
     automatically to <span class="font-medium text-slate-700">Raigad / Panvel / Kharghar</span>.
-    Every property number from <em>From</em> to <em>To</em> is queued on the
+    Leave <em>To</em> blank to scrape a single property; otherwise every number from
+    <em>From</em> to <em>To</em> is queued on the
     <code class="rounded bg-slate-100 px-1">:scraping</code> queue — run
     <code class="rounded bg-slate-100 px-1">bin/jobs</code> to start the worker.
     Each property is scraped in full (all document pages).
@@ -29,8 +30,8 @@
       </div>
 
       <div>
-        <%= f.label :to_no, "पर्यंत / To property no.", class: "mb-1 block text-xs font-medium text-slate-500" %>
-        <%= f.number_field :to_no, value: @form[:to_no], min: 1, placeholder: "e.g. 100",
+        <%= f.label :to_no, "पर्यंत / To property no. (optional)", class: "mb-1 block text-xs font-medium text-slate-500" %>
+        <%= f.number_field :to_no, value: @form[:to_no], min: 1, placeholder: "blank = just From",
               class: "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" %>
       </div>
     </div>

@@ -20,6 +20,15 @@ module Igr
     PAGE_TIMEOUT        = 45
     MAX_PAGES           = 200 # runaway guard for the results-grid page walk
 
+    # The results GridView's UniqueID — stable across the site (it is also the
+    # target of the IndexII postback). Used to fire Page$N directly, so pagination
+    # never depends on first scraping the target out of a (slow-to-render) pager.
+    GRID_TARGET = "RegistrationGrid"
+
+    # The GridView page size. The last page holds the remainder, so any page with
+    # fewer rows than this is necessarily the last one.
+    PAGE_SIZE = 10
+
     Result = Struct.new(:status, :rows, :attempts, keyword_init: true)
 
     attr_reader :driver, :logger
@@ -76,60 +85,104 @@ module Igr
 
     # Walk every page of the results grid for the current property, yielding the
     # parsed rows of each page (and its 1-based page number) with that page LIVE
-    # in the DOM, so the caller can drive IndexII enrichment on it before we move
-    # on. Page 1 is the rows solve_and_submit already found (passed in, so we do
-    # NOT re-parse and race the async render); pages 2..N are reached by firing
-    # the GridView's Page$N postback.
+    # in the DOM. Page 1 is the rows solve_and_submit already found (passed in, so
+    # we do NOT re-parse and race the async render); pages 2..N are reached by
+    # firing the GridView's Page$N postback.
     #
-    # We stop ONLY when the pager itself no longer lists a higher page number —
-    # never because a page was slow to load. The slow portal is handled by
-    # go_to_page, which re-fires and waits (up to 3 × PAGE_NAV_TIMEOUT) for the
-    # next page to actually render. This is the fix for the old "stops at 10 docs"
-    # bug, where a momentary empty/slow grid was misread as "no more pages".
+    # The next-page decision is read from the pager BEFORE the block runs — i.e.
+    # from the freshly-loaded, clean grid — so that whatever the block does (IndexII
+    # enrichment opens detail windows that can wedge the renderer) cannot poison
+    # page detection. After the block we recover the results window (close any stray
+    # detail window the block left open) before navigating. We stop ONLY when the
+    # pager lists no higher page number; a slow page is handled by go_to_page's
+    # re-fires, never misread as "no more pages".
     def each_result_page(first_rows = nil)
       rows = first_rows.presence || Igr::ResultParser.parse(driver.page_source)
       return if rows.blank?
 
-      yield rows, 1
-      target = pager_target
-      logger.info("[igr] page 1: #{rows.size} rows, pager target=#{target.inspect}")
-      return unless target # single page
-
-      prev_first = rows.first.attrs[:doc_number]
       page = 1
-      while page < MAX_PAGES
-        # Deterministic end-of-pages: the pager only links to a number greater
-        # than the current page while more pages remain. Don't infer the end from
-        # a render timeout (a slow page would be mistaken for the last one).
-        break unless Igr::ResultParser.pager_pages(driver.page_source).any? { |n| n > page }
+      loop do
+        logger.info("[igr] page #{page}: #{rows.size} rows")
+        short_page = rows.size < PAGE_SIZE # the remainder page is always the last
+        prev_first = rows.first.attrs[:doc_number]
 
-        page += 1
-        rows = go_to_page(target, page, prev_first)
+        yield rows, page
+
+        break if short_page || page >= MAX_PAGES
+        # A full page may have more after it. Only skip the next-page attempt when
+        # the pager CONFIDENTLY says we're at the last page; if the pager can't be
+        # read (slow/throttled portal), don't trust "no more" — try the next page
+        # and let navigation decide. This stops a late-rendering pager truncating
+        # a multi-page property at page 1.
+        break if pager_says_last_page?(page)
+
+        recover_results_page # close stray IndexII windows the block may have left open
+        rows = go_to_page(GRID_TARGET, page + 1, prev_first)
         if rows.blank? || rows.first.attrs[:doc_number] == prev_first
-          logger.warn("[igr] page #{page}: expected (pager lists it) but it did not load — stopping")
+          logger.info("[igr] no page after #{page} loaded — stopping (#{page} pages)")
           break
         end
-
-        logger.info("[igr] page #{page}: #{rows.size} rows (first=#{rows.first.attrs[:doc_number]})")
-        prev_first = rows.first.attrs[:doc_number]
-        yield rows, page
+        page += 1
       end
+    end
+
+    # Navigate the results grid back to page 1 (used between the list-capture pass
+    # and the IndexII-enrichment re-walk). No-op for a single-page result. After the
+    # list pass we sit on the last page, where the pager is rendered, so a brief
+    # retry to read it is enough to tell single-page from multi-page.
+    def reset_to_first_page
+      pages = []
+      6.times do
+        pages = Igr::ResultParser.pager_pages(driver.page_source)
+        break if pages.any?
+
+        sleep 0.4
+      end
+      return if pages.empty? # single page — already on it
+
+      current = Igr::ResultParser.parse(driver.page_source).first&.attrs&.dig(:doc_number)
+      go_to_page(GRID_TARGET, 1, current)
     end
 
     private
 
-    # The GridView's pager-postback target ('RegistrationGrid'), or nil for a
-    # genuine single-page grid. Retries briefly: right after results land the DOM
-    # can still be mid-render, and reading too early would mistake a paged grid
-    # for a single page and skip pages 2..N.
-    def pager_target(tries: 6)
-      tries.times do
-        target = Igr::ResultParser.pager_target(driver.page_source)
-        return target if target
-
-        sleep 0.3
+    # After a page's block (IndexII enrichment) we may be left on, or with, a stray
+    # detail window — or a hung renderer left one open. Close every window except
+    # the main results window and dismiss the popup, so the next Page$N postback
+    # runs against a clean results grid.
+    def recover_results_page
+      handles = driver.window_handles
+      if handles.size > 1
+        main = handles.first
+        (handles - [main]).each do |h|
+          driver.switch_to.window(h)
+          driver.close
+        rescue Selenium::WebDriver::Error::WebDriverError
+          next
+        end
+        driver.switch_to.window(driver.window_handles.first)
       end
+      dismiss_popup
+    rescue Selenium::WebDriver::Error::WebDriverError
       nil
+    end
+
+    # Is the pager READABLE and showing no page beyond +page+ (i.e. we are
+    # confidently on the last page)? Only then do we skip trying the next page.
+    # Retries because the pager can render a few seconds after the rows. Crucially,
+    # if the pager never becomes readable within the budget we return FALSE — "not
+    # sure", so the caller probes the next page rather than truncating. That probe
+    # is the safety net for the slow/throttled portal where the pager lags.
+    def pager_says_last_page?(page, tries: 14)
+      tries.times do
+        pages = Igr::ResultParser.pager_pages(driver.page_source)
+        if pages.any?
+          return false if pages.any? { |n| n > page } # more pages exist
+          return true                                 # pager present, nothing higher
+        end
+        sleep 0.4
+      end
+      false # pager unreadable → don't trust it; let navigation decide
     end
 
     # Fire the GridView's Page$N postback and wait for the grid to re-render with

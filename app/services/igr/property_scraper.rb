@@ -23,10 +23,7 @@ module Igr
       @property.captcha_attempts = result.attempts
 
       if result.status == :found
-        # Walk every page of the grid (not just the first 10 rows), persisting
-        # and enriching each page while it is live in the DOM. Page 1 is the rows
-        # the search already found; pages 2..N come from the GridView pager.
-        session.each_result_page(result.rows) { |rows, _page| persist(rows, session) }
+        scrape_all_documents(session, result.rows)
         @property.mark!(:found)
       else
         @property.mark!(:empty)
@@ -48,27 +45,57 @@ module Igr
       klass.new(logger: @logger, headless: @headless)
     end
 
-    def persist(rows, session)
-      rows.each do |row|
-        attrs = row.attrs.dup
-
-        if @enrich && (index_ii = session.fetch_index_ii(row.row_index))
-          attrs.merge!(index_ii.attrs) # IndexII is authoritative over the sparse grid
-          attrs[:index_ii] = index_ii.sections
-          attrs[:index_ii_fetched] = true
-        end
-
-        attrs[:raw] = row.raw
-        upsert_document(attrs)
+    # Two passes, deliberately decoupled so flaky IndexII detail pages can never
+    # truncate the document LIST:
+    #   Pass 1 — walk every page and save the grid rows, opening NO detail windows,
+    #            so nothing can wedge the browser mid-walk (this captures all pages).
+    #   Pass 2 — re-walk from page 1 and enrich each row's IndexII, best-effort: a
+    #            failure leaves that doc with its grid data (index_ii_fetched=false),
+    #            it never loses a document or stops the run.
+    def scrape_all_documents(session, first_rows)
+      session.each_result_page(first_rows) do |rows, _page|
+        rows.each { |row| upsert_document(row.attrs.merge(raw: row.raw)) }
       end
+      return unless @enrich
+
+      session.reset_to_first_page
+      enriched = 0
+      session.each_result_page do |rows, _page|
+        rows.each { |row| enriched += 1 if enrich_document(session, row) }
+      end
+      @logger.info("[igr] enriched #{enriched} new document(s) for #{@property.label} " \
+                   "(already-enriched rows skipped — resume)")
+    end
+
+    # Enrich one row's already-saved document with its IndexII detail. RESUMES: a
+    # document that is already enriched is skipped WITHOUT re-fetching its detail
+    # page — so re-running a property only does the IndexII work for new rows (the
+    # expensive, hang-prone part), instead of redoing everything. Returns the
+    # document when it enriched it, nil when it skipped or the fetch failed.
+    def enrich_document(session, row)
+      document = @property.documents.find_by(document_key(row.attrs))
+      return if document.nil? || document.index_ii_fetched?
+
+      index_ii = session.fetch_index_ii(row.row_index) or return
+      document.update!(
+        index_ii.attrs.merge(index_ii: index_ii.sections, index_ii_fetched: true)
+      )
+      document
     end
 
     # Idempotent: re-scraping a property updates the existing rows in place.
     def upsert_document(attrs)
-      document = @property.documents.find_or_initialize_by(doc_number: attrs[:doc_number])
+      document = @property.documents.find_or_initialize_by(document_key(attrs))
       document.assign_attributes(attrs)
       document.save!
       document
+    end
+
+    # A registration is unique within a property by (doc_number, SRO office) — the
+    # SAME doc number recurs across the 20+ sub-registrar offices a property search
+    # spans, so keying on doc_number alone silently merges different registrations.
+    def document_key(attrs)
+      { doc_number: attrs[:doc_number], sro_code: attrs[:sro_code] }
     end
   end
 end
