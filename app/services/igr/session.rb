@@ -18,7 +18,8 @@ module Igr
     RESULT_TIMEOUT      = 12 # seconds to poll for the async grid postback
     PAGE_NAV_TIMEOUT    = 25 # seconds for a Page$N postback to re-render (portal is slow)
     PAGE_TIMEOUT        = 45
-    MAX_PAGES           = 200 # runaway guard for the results-grid page walk
+    INDEX_II_TIMEOUT    = 20 # cap a hung IndexII detail window (else the renderer hangs ~45s)
+    MAX_PAGES           = 1000 # runaway guard — high enough for the largest properties (#3 ~200 pages)
 
     # The results GridView's UniqueID — stable across the site (it is also the
     # target of the IndexII postback). Used to fire Page$N directly, so pagination
@@ -71,16 +72,18 @@ module Igr
       link.click
       handle = wait_for_new_window(main) or return nil
 
+      # Cap how long a wedged detail window can hang (default is ~45s of "renderer
+      # not responding"); on these huge properties that adds up to many lost
+      # minutes. The ensure restores it and always cleans the window up.
+      driver.manage.timeouts.page_load = INDEX_II_TIMEOUT
       driver.switch_to.window(handle)
-      html = driver.page_source
-      driver.close
-      driver.switch_to.window(main)
-      dismiss_popup
-      Igr::IndexIiParser.parse(html)
+      Igr::IndexIiParser.parse(driver.page_source)
     rescue Selenium::WebDriver::Error::WebDriverError => e
-      logger.warn("[igr] IndexII row #{row_index} failed: #{e.message}")
-      safe_switch(main)
+      logger.warn("[igr] IndexII row #{row_index} failed: #{e.message.to_s.lines.first&.strip}")
       nil
+    ensure
+      return_to_results_window(main)
+      restore_page_timeout
     end
 
     # Walk every page of the results grid for the current property, yielding the
@@ -89,13 +92,15 @@ module Igr
     # we do NOT re-parse and race the async render); pages 2..N are reached by
     # firing the GridView's Page$N postback.
     #
-    # The next-page decision is read from the pager BEFORE the block runs — i.e.
-    # from the freshly-loaded, clean grid — so that whatever the block does (IndexII
-    # enrichment opens detail windows that can wedge the renderer) cannot poison
-    # page detection. After the block we recover the results window (close any stray
-    # detail window the block left open) before navigating. We stop ONLY when the
-    # pager lists no higher page number; a slow page is handled by go_to_page's
-    # re-fires, never misread as "no more pages".
+    # End-of-pages is decided robustly for the slow/throttled portal, without
+    # trusting a single pager read (which truncated properties at page 1 when the
+    # pager rendered late). We stop when EITHER the page is short (fewer than
+    # PAGE_SIZE rows ⇒ the remainder page, always last) OR the pager is readable and
+    # confidently shows no higher page. If the pager can't be read we do NOT assume
+    # the end — we probe the next page and let navigation decide. The next-page
+    # decision is made before the block runs (from the clean grid), and we recover
+    # the results window after the block (closing any stray IndexII window) before
+    # navigating.
     def each_result_page(first_rows = nil)
       rows = first_rows.presence || Igr::ResultParser.parse(driver.page_source)
       return if rows.blank?
@@ -126,22 +131,24 @@ module Igr
       end
     end
 
-    # Navigate the results grid back to page 1 (used between the list-capture pass
-    # and the IndexII-enrichment re-walk). No-op for a single-page result. After the
-    # list pass we sit on the last page, where the pager is rendered, so a brief
-    # retry to read it is enough to tell single-page from multi-page.
-    def reset_to_first_page
-      pages = []
-      6.times do
-        pages = Igr::ResultParser.pager_pages(driver.page_source)
-        break if pages.any?
+    # Navigate the results grid back to page 1 for the enrichment re-walk, and
+    # CONFIRM we landed there by matching page 1's known first DocNo. After the list
+    # pass we sit on the last page; on the slow/throttled portal a single Page$1
+    # postback can silently fail to advance, leaving us on the (short) last page —
+    # which then makes the enrichment pass quit after one page. Retry until the
+    # first DocNo matches +page1_first+. Returns true once confirmed (or for a
+    # single-page result), false if it never got back — the caller then skips
+    # enrichment and lets the resume pass retry next run.
+    def reset_to_first_page(page1_first)
+      return true if page1_first.nil?
 
-        sleep 0.4
+      5.times do
+        current = Igr::ResultParser.parse(driver.page_source).first&.attrs&.dig(:doc_number)
+        return true if current == page1_first
+
+        go_to_page(GRID_TARGET, 1, current)
       end
-      return if pages.empty? # single page — already on it
-
-      current = Igr::ResultParser.parse(driver.page_source).first&.attrs&.dig(:doc_number)
-      go_to_page(GRID_TARGET, 1, current)
+      Igr::ResultParser.parse(driver.page_source).first&.attrs&.dig(:doc_number) == page1_first
     end
 
     private
@@ -163,6 +170,28 @@ module Igr
         driver.switch_to.window(driver.window_handles.first)
       end
       dismiss_popup
+    rescue Selenium::WebDriver::Error::WebDriverError
+      nil
+    end
+
+    # Close any IndexII detail window and return to the results window — runs in
+    # fetch_index_ii's ensure, so even a hung/timed-out fetch leaves the browser on
+    # the results grid for the next row/page.
+    def return_to_results_window(main)
+      (driver.window_handles - [main]).each do |handle|
+        driver.switch_to.window(handle)
+        driver.close
+      rescue Selenium::WebDriver::Error::WebDriverError
+        next
+      end
+      driver.switch_to.window(main)
+      dismiss_popup
+    rescue Selenium::WebDriver::Error::WebDriverError
+      safe_switch(main)
+    end
+
+    def restore_page_timeout
+      driver.manage.timeouts.page_load = PAGE_TIMEOUT
     rescue Selenium::WebDriver::Error::WebDriverError
       nil
     end

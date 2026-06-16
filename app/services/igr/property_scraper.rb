@@ -53,12 +53,19 @@ module Igr
     #            failure leaves that doc with its grid data (index_ii_fetched=false),
     #            it never loses a document or stops the run.
     def scrape_all_documents(session, first_rows)
+      page1_first = first_rows&.first&.attrs&.dig(:doc_number)
+
       session.each_result_page(first_rows) do |rows, _page|
         rows.each { |row| upsert_document(row.attrs.merge(raw: row.raw)) }
       end
       return unless @enrich
 
-      session.reset_to_first_page
+      unless session.reset_to_first_page(page1_first)
+        @logger.warn("[igr] could not return to page 1 for #{@property.label} — " \
+                     "IndexII enrichment skipped this run (resume will retry)")
+        return
+      end
+
       enriched = 0
       session.each_result_page do |rows, _page|
         rows.each { |row| enriched += 1 if enrich_document(session, row) }
