@@ -32,7 +32,15 @@ module Igr
       result
     rescue StandardError => e
       @logger.error("[igr] scrape failed for #{@property.label}: #{e.class}: #{e.message}")
-      @property.mark!(:error, error: "#{e.class}: #{e.message}")
+      # A retry that fails (e.g. the portal times out) must NOT bury documents we
+      # already have behind an :error status — the UI only links :found properties
+      # to their docs. Keep a property with data as :found (the resume pass can
+      # finish it later); only mark :error when there is genuinely nothing to show.
+      if @property.documents.exists?
+        @property.mark!(:found)
+      else
+        @property.mark!(:error, error: "#{e.class}: #{e.message}")
+      end
       raise
     ensure
       session&.close
