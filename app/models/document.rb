@@ -42,6 +42,14 @@ class Document < ApplicationRecord
     building_name.presence || "Property ##{property.property_no}"
   end
 
+  # The Marathi description the building name is extracted from. The IndexII detail
+  # (section 4) is richest, but it is only present once a doc is enriched — the
+  # results-grid Property Description carries the same address text and is captured
+  # for EVERY doc, so it is the fallback so even un-enriched docs can be named.
+  def building_description
+    index_ii&.dig("4").presence || property_description
+  end
+
   def sellers
     split_parties(seller_names)
   end

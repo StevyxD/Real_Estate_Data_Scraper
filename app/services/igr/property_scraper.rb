@@ -56,7 +56,7 @@ module Igr
       page1_first = first_rows&.first&.attrs&.dig(:doc_number)
 
       session.each_result_page(first_rows) do |rows, _page|
-        rows.each { |row| upsert_document(row.attrs.merge(raw: row.raw)) }
+        rows.each { |row| upsert_document(grid_attrs(row)) }
       end
       return unless @enrich
 
@@ -88,6 +88,17 @@ module Igr
         index_ii.attrs.merge(index_ii: index_ii.sections, index_ii_fetched: true)
       )
       document
+    end
+
+    # Grid-row attributes for the list pass, with a building name extracted from the
+    # grid Property Description (the regex catches the well-formed ones; the rest are
+    # left for the LLM backfill). IndexII enrichment may overwrite it later with a
+    # detail-sourced name.
+    def grid_attrs(row)
+      attrs = row.attrs.merge(raw: row.raw)
+      name = Igr::BuildingName.call(attrs[:property_description].to_s)
+      attrs[:building_name] = name if name.present?
+      attrs
     end
 
     # Idempotent: re-scraping a property updates the existing rows in place.

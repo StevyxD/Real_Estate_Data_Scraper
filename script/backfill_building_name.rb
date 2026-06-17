@@ -6,10 +6,12 @@
 # Leaves already-populated names untouched (the LLM backfill may have improved
 # them). For the messier rows this can't crack, run backfill_building_name_llm.rb.
 updated = 0
-scope = Document.where.not(index_ii: {}).where(building_name: [nil, ""])
+# Every doc without a name yet — sourced from building_description, which falls
+# back to the grid Property Description, so un-enriched docs are covered too.
+scope = Document.where(building_name: [nil, ""])
 
 scope.find_each do |document|
-  name = Igr::BuildingName.call(document.index_ii["4"].to_s)
+  name = Igr::BuildingName.call(document.building_description.to_s)
   next if name.blank?
 
   document.update_column(:building_name, name)
@@ -17,4 +19,4 @@ scope.find_each do |document|
 end
 
 puts "Backfilled building_name on #{updated} documents via the regex extractor."
-puts "Remaining blank: #{Document.where.not(index_ii: {}).where(building_name: [nil, '']).count}"
+puts "Remaining blank: #{Document.where(building_name: [nil, '']).count}"

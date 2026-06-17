@@ -6,7 +6,7 @@
 #
 # Only touches regex-blank rows, batched (~5¢ per dataset). A null answer means
 # the model judged there is genuinely no building (plot/correction deed).
-scope = Document.where.not(index_ii: {}).where(building_name: [nil, ""])
+scope = Document.where(building_name: [nil, ""])
 documents = scope.to_a
 puts "#{documents.size} documents need an LLM building name."
 
@@ -14,7 +14,7 @@ llm = Igr::BuildingNameLlm.new
 filled = 0
 
 documents.each_slice(Igr::BuildingNameLlm::BATCH_SIZE).with_index do |batch, i|
-  descriptions = batch.map { |document| document.index_ii["4"].to_s }
+  descriptions = batch.map { |document| document.building_description.to_s }
   names = llm.call_batch(descriptions)
 
   batch.zip(names).each do |document, name|
