@@ -69,7 +69,7 @@
                 <% end %>
               </p>
               <p class="truncate text-xs text-slate-400">
-                <% if property.found? %><%= property.docs_count %> document<%= "s" unless property.docs_count == 1 %>
+                <% if property.found? %><%= property.docs_count %> document<%= "s" unless property.docs_count == 1 %><% unless property.fully_scraped? %> <span class="font-medium text-amber-600">· incomplete (more pages — re-scrape)</span><% end %>
                 <% elsif property.error? %><span class="text-rose-500"><%= property.error_message.to_s.truncate(60) %></span>
                 <% else %>no records<% end %> · <%= ago(property.scraped_at) %>
               </p>

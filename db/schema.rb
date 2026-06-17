@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_13_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_17_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -60,6 +60,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_13_000000) do
     t.string "district", null: false
     t.datetime "enqueued_at"
     t.text "error_message"
+    t.boolean "fully_scraped", default: true, null: false
     t.integer "property_no", null: false
     t.datetime "scraped_at"
     t.string "search_status", default: "pending", null: false
@@ -67,6 +68,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_13_000000) do
     t.datetime "updated_at", null: false
     t.string "village", null: false
     t.integer "year", null: false
+    t.index ["fully_scraped"], name: "index_properties_on_fully_scraped"
     t.index ["search_status"], name: "index_properties_on_search_status"
     t.index ["year", "district", "tahsil", "village", "property_no"], name: "index_properties_on_search_key", unique: true
   end

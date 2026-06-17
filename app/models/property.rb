@@ -23,8 +23,13 @@ class Property < ApplicationRecord
             uniqueness: { scope: %i[year district tahsil village],
                           message: "is already queued for this village/year" }
 
-  # Rows the scraper is allowed to (re)attempt.
-  scope :scrapable,  -> { where(search_status: %w[pending error]) }
+  # Found but cut short (throttle / next page wouldn't load) — has data, but more
+  # remains, so it should be re-scraped to finish.
+  scope :incomplete, -> { where(fully_scraped: false) }
+
+  # Rows the scraper is allowed to (re)attempt: never-done (pending/error) plus
+  # found-but-incomplete, so a throttled partial scrape gets finished next run.
+  scope :scrapable,  -> { where(search_status: %w[pending error]).or(incomplete) }
   scope :active,     -> { where(search_status: %w[pending scraping]) }
   scope :finished,   -> { where(search_status: %w[found empty error]) }
   scope :for_village, ->(v) { where(village: v) }

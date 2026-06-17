@@ -101,9 +101,13 @@ module Igr
     # decision is made before the block runs (from the clean grid), and we recover
     # the results window after the block (closing any stray IndexII window) before
     # navigating.
+    # Returns :complete when it reached the genuine last page, or :incomplete when
+    # the walk was cut short — the next page was expected but would not load (the
+    # throttled portal) or the MAX_PAGES guard was hit. The caller uses this to flag
+    # a property for re-scraping instead of treating a truncated walk as done.
     def each_result_page(first_rows = nil)
       rows = first_rows.presence || Igr::ResultParser.parse(driver.page_source)
-      return if rows.blank?
+      return :complete if rows.blank?
 
       page = 1
       loop do
@@ -113,19 +117,23 @@ module Igr
 
         yield rows, page
 
-        break if short_page || page >= MAX_PAGES
+        return :complete if short_page
+        if page >= MAX_PAGES
+          logger.warn("[igr] hit MAX_PAGES (#{MAX_PAGES}) — there may be more (incomplete)")
+          return :incomplete
+        end
         # A full page may have more after it. Only skip the next-page attempt when
         # the pager CONFIDENTLY says we're at the last page; if the pager can't be
         # read (slow/throttled portal), don't trust "no more" — try the next page
         # and let navigation decide. This stops a late-rendering pager truncating
         # a multi-page property at page 1.
-        break if pager_says_last_page?(page)
+        return :complete if pager_says_last_page?(page)
 
         recover_results_page # close stray IndexII windows the block may have left open
         rows = go_to_page(GRID_TARGET, page + 1, prev_first)
         if rows.blank? || rows.first.attrs[:doc_number] == prev_first
-          logger.info("[igr] no page after #{page} loaded — stopping (#{page} pages)")
-          break
+          logger.warn("[igr] page #{page + 1} would not load — stopping at page #{page} (INCOMPLETE)")
+          return :incomplete
         end
         page += 1
       end

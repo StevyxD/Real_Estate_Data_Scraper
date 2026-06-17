@@ -37,6 +37,7 @@ module Igr
       # to their docs. Keep a property with data as :found (the resume pass can
       # finish it later); only mark :error when there is genuinely nothing to show.
       if @property.documents.exists?
+        @property.fully_scraped = false # an error mid-scrape means it's not done
         @property.mark!(:found)
       else
         @property.mark!(:error, error: "#{e.class}: #{e.message}")
@@ -63,9 +64,14 @@ module Igr
     def scrape_all_documents(session, first_rows)
       page1_first = first_rows&.first&.attrs&.dig(:doc_number)
 
-      session.each_result_page(first_rows) do |rows, _page|
+      # :incomplete ⇒ the page-walk was cut short (throttle / next page wouldn't
+      # load). Record it so the property is flagged and re-scraped, not mistaken
+      # for fully captured.
+      list_status = session.each_result_page(first_rows) do |rows, _page|
         rows.each { |row| upsert_document(grid_attrs(row)) }
       end
+      @property.fully_scraped = (list_status != :incomplete)
+
       return unless @enrich
 
       unless session.reset_to_first_page(page1_first)
