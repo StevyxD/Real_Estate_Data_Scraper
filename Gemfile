@@ -50,7 +50,7 @@ gem "mini_magick"
 # Tesseract OCR wrapper for solving the hex captcha
 gem "rtesseract"
 # Pagination for the documents index. Pinned: v4x changed the API incompatibly.
-gem "pagy", "~> 9.3"
+gem "pagy", "~> 43.5"
 # Claude (Anthropic) SDK — LLM fallback for Marathi building-name extraction
 gem "anthropic", "~> 1.1"
 
