@@ -20,7 +20,7 @@ module Igr
     PAGE_TIMEOUT        = 45
     INDEX_II_TIMEOUT    = 20 # cap a hung IndexII detail window (else the renderer hangs ~45s)
     MAX_PAGES           = 1000 # runaway guard — high enough for the largest properties (#3 ~200 pages)
-    ELEMENT_TIMEOUT     = 30 # default element wait — the portal is slow; don't fail it at 15s
+    ELEMENT_TIMEOUT     = 120 # default element wait (2 min) — give the slow/throttled portal plenty of time
     OPEN_RETRIES        = 3  # reload the landing page this many times if its form won't appear
     OPEN_BACKOFF        = 6  # seconds × attempt to wait before each landing-page reload
 
