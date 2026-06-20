@@ -20,6 +20,9 @@ module Igr
     PAGE_TIMEOUT        = 45
     INDEX_II_TIMEOUT    = 20 # cap a hung IndexII detail window (else the renderer hangs ~45s)
     MAX_PAGES           = 1000 # runaway guard — high enough for the largest properties (#3 ~200 pages)
+    ELEMENT_TIMEOUT     = 30 # default element wait — the portal is slow; don't fail it at 15s
+    OPEN_RETRIES        = 3  # reload the landing page this many times if its form won't appear
+    OPEN_BACKOFF        = 6  # seconds × attempt to wait before each landing-page reload
 
     # The results GridView's UniqueID — stable across the site (it is also the
     # target of the IndexII postback). Used to fire Page$N directly, so pagination
@@ -278,11 +281,27 @@ module Igr
       @driver = nil
     end
 
+    # Load the landing page and reveal the search form, retrying the whole page
+    # load a few times. On a slow/throttled portal the page often comes back
+    # without the form (the tab button never appears → open_tab times out); a fresh
+    # reload after a backoff usually gets a complete page. Only a persistent
+    # failure across all retries propagates.
     def open_search
-      driver.navigate.to(BASE_URL)
-      dismiss_popup            # intro "Search Flow" popup overlays every load
-      open_tab                 # subclass: JS-click the tab to reveal its form
-      dismiss_popup
+      attempt = 0
+      begin
+        driver.navigate.to(BASE_URL)
+        dismiss_popup          # intro "Search Flow" popup overlays every load
+        open_tab               # subclass: reveal the tab's form (raises if it won't appear)
+        dismiss_popup
+      rescue Selenium::WebDriver::Error::TimeoutError,
+             Selenium::WebDriver::Error::NoSuchElementError => e
+        attempt += 1
+        raise if attempt >= OPEN_RETRIES
+
+        logger.warn("[igr] landing page didn't load (#{e.class}); reloading #{attempt}/#{OPEN_RETRIES}")
+        sleep(OPEN_BACKOFF * attempt)
+        retry
+      end
     end
 
     # ---- captcha + submit loop --------------------------------------------
@@ -448,7 +467,7 @@ module Igr
       end
     end
 
-    def wait(timeout: 15)
+    def wait(timeout: ELEMENT_TIMEOUT)
       Selenium::WebDriver::Wait.new(timeout:)
     end
 
