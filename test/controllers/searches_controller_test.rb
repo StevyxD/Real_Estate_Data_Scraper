@@ -8,15 +8,17 @@ class SearchesControllerTest < ActionDispatch::IntegrationTest
     assert_select "input#search_village"
   end
 
-  test "create queues a scrape for a valid Mumbai selection" do
+  # Enqueuing is owned by ScrapeDispatcherJob (recurring); the controller just
+  # makes the target due.
+  test "create makes a valid Mumbai selection due for scraping" do
     assert_difference -> { Property.count }, 1 do
-      assert_enqueued_with(job: ScrapePropertyJob) do
-        post search_path, params: { search: { year: 2026, district: "Mumbai City", village: "Parel", property_no: 4242 } }
-      end
+      post search_path, params: { search: { year: 2026, district: "Mumbai City", village: "Parel", property_no: 4242 } }
     end
 
     property = Property.find_by!(village: "Parel", property_no: 4242)
     assert property.pending?
+    assert_nil property.next_retry_at
+    assert Property.due.exists?(property.id)
     assert_equal "", property.tahsil
     assert_redirected_to dashboard_path
   end

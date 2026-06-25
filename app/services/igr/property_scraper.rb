@@ -25,6 +25,15 @@ module Igr
       if result.status == :found
         scrape_all_documents(session, result.rows)
         @property.mark!(:found)
+      elsif @property.documents.exists?
+        # The search came back empty, but we already hold documents from a prior
+        # scrape. On this flaky portal an "empty" result is unreliable (a wrong
+        # captcha or a throttled search returns the same blank grid as a genuine
+        # "no records") — so it is almost certainly a transient miss, NOT proof the
+        # records vanished. Do NOT downgrade to :empty and bury real data; keep it
+        # :found and flag it incomplete so the retry path re-attempts it.
+        @property.fully_scraped = false
+        @property.mark!(:found)
       else
         @property.mark!(:empty)
       end
@@ -77,6 +86,9 @@ module Igr
       unless session.reset_to_first_page(page1_first)
         @logger.warn("[igr] could not return to page 1 for #{@property.label} — " \
                      "IndexII enrichment skipped this run (resume will retry)")
+        # Enrichment never ran, so docs are still un-enriched — keep the property
+        # due so the resume pass finishes them.
+        @property.fully_scraped = false
         return
       end
 
@@ -86,6 +98,17 @@ module Igr
       end
       @logger.info("[igr] enriched #{enriched} new document(s) for #{@property.label} " \
                    "(already-enriched rows skipped — resume)")
+
+      # Self-heal silent enrichment gaps: if ANY document still lacks its IndexII
+      # detail (a fetch returned nil on the flaky portal, without raising), the
+      # property is NOT fully done. Flag it incomplete so the dispatcher re-runs
+      # it — the resume pass only re-fetches the un-enriched rows, not everything.
+      unfetched = @property.documents.where(index_ii_fetched: false).count
+      if unfetched.positive?
+        @logger.info("[igr] #{@property.label}: #{unfetched} document(s) still un-enriched — " \
+                     "flagging incomplete for resume")
+        @property.fully_scraped = false
+      end
     end
 
     # Enrich one row's already-saved document with its IndexII detail. RESUMES: a

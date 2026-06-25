@@ -15,8 +15,24 @@
       </span>
     <% end %>
   </div>
-  <%= link_to "Scraper", search_path, class: "rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700" %>
+  <div class="flex items-center gap-2">
+    <% if @paused %>
+      <%= button_to "▶ Resume scraping", scraper_resume_path,
+            class: "rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700" %>
+    <% else %>
+      <%= button_to "⏸ Pause scraping", scraper_pause_path,
+            class: "rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600" %>
+    <% end %>
+    <%= link_to "Scraper", search_path, class: "rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700" %>
+  </div>
 </div>
+
+<% if @paused %>
+  <div class="mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+    <span class="inline-block h-2 w-2 rounded-full bg-amber-500"></span>
+    Scraping is <strong>paused</strong>. The plot that was running will finish; no new plots start until you resume.
+  </div>
+<% end %>
 
 <!-- status counts -->
 <div class="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-5">

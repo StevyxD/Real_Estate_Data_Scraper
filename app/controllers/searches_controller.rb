@@ -18,12 +18,12 @@ class SearchesController < ApplicationController
       year: @search[:year].to_i, district: @search[:district], tahsil: "",
       village: village, property_no: @search[:property_no].to_i
     )
-    property.assign_attributes(search_status: "pending", enqueued_at: Time.current)
+    property.assign_attributes(search_status: "pending", attempts: 0, next_retry_at: nil,
+                               error_message: nil)
 
     if property.save
-      ScrapePropertyJob.perform_later(property.id)
       redirect_to dashboard_path,
-                  notice: "Queued #{property.label} for scraping. Run `bin/jobs` to start the worker — watch progress below."
+                  notice: "Queued #{property.label} for scraping. Run `bin/jobs` — the dispatcher picks it up within a minute and retries on failure."
     else
       render_invalid(property.errors.full_messages.to_sentence)
     end

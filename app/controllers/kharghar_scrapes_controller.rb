@@ -57,11 +57,11 @@ class KhargharScrapesController < ApplicationController
       property = Property.find_or_initialize_by(
         year:, district: DISTRICT, tahsil: TAHSIL, village: VILLAGE, property_no: number
       )
-      property.assign_attributes(search_status: "pending", enqueued_at: Time.current)
+      property.assign_attributes(search_status: "pending", attempts: 0, next_retry_at: nil,
+                                 error_message: nil)
       next 0 unless property.save
 
-      ScrapePropertyJob.perform_later(property.id)
-      1
+      1 # ScrapeDispatcherJob will pick it up and retry on failure
     end
   end
 

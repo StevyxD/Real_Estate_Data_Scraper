@@ -2,6 +2,7 @@ class DashboardController < ApplicationController
   STATUS_ORDER = %w[scraping pending found empty error].freeze
 
   def index
+    @paused = Igr::ScrapeControl.paused?
     @counts = Property.group(:search_status).count
 
     # In-flight: actively scraping first, then queued.

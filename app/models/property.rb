@@ -17,6 +17,15 @@ class Property < ApplicationRecord
        { pending: "pending", scraping: "scraping", found: "found", empty: "empty", error: "error" },
        default: "pending"
 
+  # --- Retry scheduling (unattended recovery from the flaky portal) ----------
+  # A failed property is parked with a +next_retry_at+ and re-attempted once it
+  # comes due. Backoff is exponential with jitter so a property that keeps
+  # failing is tried less and less often instead of hammering the site.
+  MAX_ATTEMPTS  = 8           # real (non-outage) failures before we give up
+  RETRY_BASE    = 2.minutes   # first backoff window
+  RETRY_CAP     = 30.minutes  # longest backoff window
+  ENQUEUE_LEASE = 30.minutes  # don't re-pick a property while a job holds it
+
   validates :year, :district, :village, :property_no, presence: true
   validates :year, numericality: { only_integer: true, greater_than: 2000 }
   validates :property_no,
@@ -33,6 +42,22 @@ class Property < ApplicationRecord
   scope :active,     -> { where(search_status: %w[pending scraping]) }
   scope :finished,   -> { where(search_status: %w[found empty error]) }
   scope :for_village, ->(v) { where(village: v) }
+
+  # Given up on: a real (non-outage) failure that exhausted MAX_ATTEMPTS. These
+  # are excluded from +due+ and need a manual `rake igr:retry_dead` to revive.
+  scope :dead, -> { where(search_status: "error").where(arel_table[:attempts].gteq(MAX_ATTEMPTS)) }
+
+  # The work-list the dispatcher feeds to the worker: anything not finished-good
+  # (pending, retryable error, or found-but-incomplete) that isn't already in
+  # flight (scraping), hasn't exhausted its attempts, and whose backoff window
+  # has elapsed (next_retry_at NULL or in the past). Oldest-due first.
+  scope :due, -> {
+    scrapable
+      .where.not(search_status: "scraping")
+      .where(arel_table[:attempts].lt(MAX_ATTEMPTS))
+      .where(arel_table[:next_retry_at].eq(nil).or(arel_table[:next_retry_at].lteq(Time.current)))
+      .order(Arel.sql("next_retry_at IS NULL DESC"), :next_retry_at, :property_no)
+  }
 
   def mumbai?
     tahsil.blank?
@@ -54,5 +79,40 @@ class Property < ApplicationRecord
   # Record a terminal outcome for this search attempt.
   def mark!(status, error: nil)
     update!(search_status: status, scraped_at: Time.current, error_message: error)
+  end
+
+  # The dispatcher claims a property before enqueuing its job, pushing
+  # +next_retry_at+ out by ENQUEUE_LEASE so it isn't handed out twice. If the
+  # job runs it overwrites the lease (success clears the row from +due+; failure
+  # sets a real backoff); if the worker died, the lease lapses and it comes due
+  # again on its own.
+  def lease!
+    update!(enqueued_at: Time.current, next_retry_at: Time.current + ENQUEUE_LEASE)
+  end
+
+  # Park a failed property for a later retry with exponential backoff + jitter.
+  # +kind+ is :outage (site down — don't count it) or :app (specific to this
+  # property — count it toward MAX_ATTEMPTS and give up once exhausted).
+  def schedule_retry!(kind:, error: nil)
+    burn = kind == :app
+    new_attempts = attempts + (burn ? 1 : 0)
+
+    if burn && new_attempts >= MAX_ATTEMPTS
+      # Out of retries: leave it :error, no next_retry_at — it drops out of +due+
+      # until manually revived.
+      update!(search_status: "error", attempts: new_attempts,
+              last_error_kind: kind.to_s, error_message: error, next_retry_at: nil)
+      return
+    end
+
+    update!(attempts: new_attempts, last_error_kind: kind.to_s,
+            error_message: error, next_retry_at: Time.current + backoff_delay(new_attempts))
+  end
+
+  private
+
+  def backoff_delay(attempt)
+    window = [RETRY_BASE * (2**[attempt - 1, 0].max), RETRY_CAP].min
+    window + rand(0..(window * 0.25)) # jitter so failures don't sync up
   end
 end

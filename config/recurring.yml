@@ -9,7 +9,20 @@
 #     priority: 2
 #     schedule: at 5am every day
 
+# The dispatcher heartbeat: tops up the :scraping queue with due properties and
+# gates on the portal's health during an outage. This is what makes the scraper
+# run unattended — just leave `bin/jobs` running.
+development:
+  scrape_dispatcher:
+    class: ScrapeDispatcherJob
+    queue: default
+    schedule: every minute
+
 production:
+  scrape_dispatcher:
+    class: ScrapeDispatcherJob
+    queue: default
+    schedule: every minute
   clear_solid_queue_finished_jobs:
     command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
     schedule: every hour at minute 12

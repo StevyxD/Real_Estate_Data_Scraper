@@ -3,13 +3,21 @@ default: &default
     - polling_interval: 1
       batch_size: 500
   workers:
-    # A SINGLE worker thread: scrapes must run one at a time (one headless
-    # Chrome). More threads/processes would launch concurrent browsers, which
-    # causes memory contention and InvalidSessionId crashes.
-    - queues: "*"
+    # The browser worker: a SINGLE thread/process so scrapes run one at a time
+    # (one headless Chrome). More threads/processes would launch concurrent
+    # browsers → memory contention and InvalidSessionId crashes. Pulls ONLY the
+    # :scraping queue.
+    - queues: scraping
       threads: 1
       processes: 1
       polling_interval: 0.5
+    # The control worker: runs the every-minute ScrapeDispatcherJob (and any
+    # other :default jobs). It never launches Chrome, so this second lightweight
+    # worker is safe and keeps dispatching from blocking behind a long scrape.
+    - queues: default
+      threads: 1
+      processes: 1
+      polling_interval: 1
 
 development:
   <<: *default
