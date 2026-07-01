@@ -17,14 +17,17 @@ module Igr
 
     def call
       @property.mark_scraping! # in progress — visible on the dashboard
+      started = clock
 
       session = session_for(@property)
       result  = session.run(@property)
       @property.captcha_attempts = result.attempts
+      @logger.info("[igr][timing] #{@property.label}: search → #{result.status} in " \
+                   "#{elapsed(started)}s (#{result.attempts} captcha attempt(s))")
 
       if result.status == :found
         scrape_all_documents(session, result.rows)
-        @property.mark!(:found)
+        mark_found
       elsif @property.documents.exists?
         # The search came back empty, but we already hold documents from a prior
         # scrape. On this flaky portal an "empty" result is unreliable (a wrong
@@ -33,7 +36,7 @@ module Igr
         # records vanished. Do NOT downgrade to :empty and bury real data; keep it
         # :found and flag it incomplete so the retry path re-attempts it.
         @property.fully_scraped = false
-        @property.mark!(:found)
+        mark_found
       else
         @property.mark!(:empty)
       end
@@ -58,6 +61,22 @@ module Igr
 
     private
 
+    # Persist a :found outcome. When the result is still incomplete (the throttled
+    # portal cut the page-walk / enrichment short), count the resume pass against
+    # the property's budget so the same plot can't be re-scraped forever — once it
+    # exhausts the budget it drops out of the dispatcher's worklist and keeps its
+    # partial data as best-effort. A genuinely complete scrape never counts a pass.
+    def mark_found
+      unless @property.fully_scraped
+        @property.record_incomplete_pass!
+        if @property.attempts >= Property::MAX_ATTEMPTS
+          @logger.info("[igr] #{@property.label}: still incomplete after #{@property.attempts} " \
+                       "resume passes — accepting as best-effort (won't re-queue)")
+        end
+      end
+      @property.mark!(:found)
+    end
+
     def session_for(property)
       klass = property.mumbai? ? Igr::MumbaiSession : Igr::RestMaharashtraSession
       klass.new(logger: @logger, headless: @headless)
@@ -76,10 +95,16 @@ module Igr
       # :incomplete ⇒ the page-walk was cut short (throttle / next page wouldn't
       # load). Record it so the property is flagged and re-scraped, not mistaken
       # for fully captured.
+      list_started = clock
+      pages = 0
       list_status = session.each_result_page(first_rows) do |rows, _page|
+        pages += 1
         rows.each { |row| upsert_document(grid_attrs(row)) }
       end
       @property.fully_scraped = (list_status != :incomplete)
+      @logger.info("[igr][timing] #{@property.label}: page-walk #{pages} page(s), " \
+                   "#{@property.documents.count} doc(s) in #{elapsed(list_started)}s " \
+                   "(#{list_status})")
 
       return unless @enrich
 
@@ -92,12 +117,13 @@ module Igr
         return
       end
 
+      enrich_started = clock
       enriched = 0
       session.each_result_page do |rows, _page|
         rows.each { |row| enriched += 1 if enrich_document(session, row) }
       end
-      @logger.info("[igr] enriched #{enriched} new document(s) for #{@property.label} " \
-                   "(already-enriched rows skipped — resume)")
+      @logger.info("[igr][timing] #{@property.label}: enriched #{enriched} new document(s) in " \
+                   "#{elapsed(enrich_started)}s (already-enriched rows skipped — resume)")
 
       # Self-heal silent enrichment gaps: if ANY document still lacks its IndexII
       # detail (a fetch returned nil on the flaky portal, without raising), the
@@ -152,5 +178,11 @@ module Igr
     def document_key(attrs)
       { doc_number: attrs[:doc_number], sro_code: attrs[:sro_code] }
     end
+
+    # Monotonic timing helpers for the [igr][timing] logs — wall-clock breakdown of
+    # where a scrape spends its seconds (search vs page-walk vs IndexII enrichment),
+    # so the slow part is measured, not guessed.
+    def clock = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    def elapsed(since) = (clock - since).round(1)
   end
 end

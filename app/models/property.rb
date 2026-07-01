@@ -13,8 +13,15 @@ class Property < ApplicationRecord
   # found    -> scraped, documents retrieved
   # empty    -> ran fine, the site has no records for it
   # error    -> the scrape raised (failed)
+  # parked   -> intentionally taken out of the work-list by the dashboard's
+  #             "Stop & clear" button. Excluded from +due+ and +active+ (so it
+  #             drops off the scrape-activity list) and never auto-resumed — a
+  #             parked target only re-enters the queue when re-seeded (search form
+  #             / rake task). search_status is a plain string column, so adding
+  #             this value needs NO migration.
   enum :search_status,
-       { pending: "pending", scraping: "scraping", found: "found", empty: "empty", error: "error" },
+       { pending: "pending", scraping: "scraping", found: "found", empty: "empty", error: "error",
+         parked: "parked" },
        default: "pending"
 
   # --- Retry scheduling (unattended recovery from the flaky portal) ----------
@@ -46,6 +53,13 @@ class Property < ApplicationRecord
   # Given up on: a real (non-outage) failure that exhausted MAX_ATTEMPTS. These
   # are excluded from +due+ and need a manual `rake igr:retry_dead` to revive.
   scope :dead, -> { where(search_status: "error").where(arel_table[:attempts].gteq(MAX_ATTEMPTS)) }
+
+  # Accepted as best-effort: a found-but-incomplete plot that exhausted its resume
+  # budget (the throttled portal kept cutting it short). Kept as :found with its
+  # partial documents; dropped from +due+ so it isn't re-scraped forever. Revive
+  # with `rake igr:retry_incomplete`.
+  scope :incomplete_exhausted,
+        -> { incomplete.where(arel_table[:attempts].gteq(MAX_ATTEMPTS)) }
 
   # The work-list the dispatcher feeds to the worker: anything not finished-good
   # (pending, retryable error, or found-but-incomplete) that isn't already in
@@ -107,6 +121,21 @@ class Property < ApplicationRecord
 
     update!(attempts: new_attempts, last_error_kind: kind.to_s,
             error_message: error, next_retry_at: Time.current + backoff_delay(new_attempts))
+  end
+
+  # A scrape COMPLETED but the property is still incomplete — the throttled portal
+  # cut the page-walk or IndexII enrichment short. Count the resume pass against
+  # the same +attempts+/MAX_ATTEMPTS budget as hard-error retries, with the same
+  # exponential backoff, so a plot that can never be finished isn't re-scraped
+  # forever. Once +attempts+ reaches MAX_ATTEMPTS it falls out of +due+ on its own
+  # (the existing attempts gate) and keeps its partial data as best-effort — still
+  # :found, documents still visible. Revive with `rake igr:retry_incomplete`.
+  #
+  # Sets attributes in memory only; the caller's +mark!(:found)+ persists them.
+  def record_incomplete_pass!
+    self.attempts        = attempts + 1
+    self.last_error_kind = "incomplete"
+    self.next_retry_at   = attempts >= MAX_ATTEMPTS ? nil : Time.current + backoff_delay(attempts)
   end
 
   private

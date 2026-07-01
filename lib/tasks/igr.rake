@@ -23,12 +23,16 @@ module IgrRake
       property = Property.find_or_create_by!(
         year:, district:, tahsil:, village:, property_no: number
       )
-      next unless property.pending? || property.error?
+      # Re-seed never-done (pending/error) and parked rows — a parked target was
+      # stopped from the dashboard and the user is now explicitly re-queuing it.
+      next unless property.pending? || property.error? || property.parked?
 
       property.update!(search_status: "pending", attempts: 0,
                        next_retry_at: nil, error_message: nil)
       seeded += 1
     end
+    # Lift any "Stop & clear" pause so these actually run (no-op if not paused).
+    Igr::ScrapeControl.resume! if seeded.positive?
     puts "Seeded #{seeded} of #{range.size} properties for #{[village, tahsil, district].reject(&:blank?).join(' / ')} #{year}."
     puts "Run `bin/jobs` — the dispatcher will scrape (and retry) them automatically."
   end
@@ -70,6 +74,12 @@ namespace :igr do
     puts "Reset #{count} dead propert#{count == 1 ? 'y' : 'ies'} — they will be retried."
   end
 
+  desc "Revive incomplete properties that exhausted their resume budget (resets attempts so they finish)"
+  task retry_incomplete: :environment do
+    count = Property.incomplete_exhausted.update_all(attempts: 0, next_retry_at: nil)
+    puts "Reset #{count} exhausted-incomplete propert#{count == 1 ? 'y' : 'ies'} — they will resume."
+  end
+
   desc "Show scraper progress: status counts, how many are due / backing off / dead, site health"
   task status: :environment do
     counts = Property.group(:search_status).count
@@ -81,9 +91,10 @@ namespace :igr do
     puts format("  %-9s %d", "incomplete", Property.incomplete.where(search_status: "found").count)
     puts
     puts "Retry queue:"
-    puts "  due now        #{Property.due.count}"
-    puts "  backing off    #{Property.scrapable.where.not(search_status: 'scraping').where('next_retry_at > ?', Time.current).count}"
-    puts "  dead (give up) #{Property.dead.count}"
+    puts "  due now            #{Property.due.count}"
+    puts "  backing off        #{Property.scrapable.where.not(search_status: 'scraping').where('next_retry_at > ?', Time.current).count}"
+    puts "  dead (give up)     #{Property.dead.count}"
+    puts "  incomplete (maxed) #{Property.incomplete_exhausted.count}"
     puts
     inflight = defined?(SolidQueue::Job) ? SolidQueue::Job.where(queue_name: "scraping", finished_at: nil).count : "n/a"
     puts "Jobs in flight (:scraping): #{inflight}"

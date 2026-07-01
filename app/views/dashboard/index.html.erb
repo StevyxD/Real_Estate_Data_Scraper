@@ -23,6 +23,10 @@
       <%= button_to "⏸ Pause scraping", scraper_pause_path,
             class: "rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600" %>
     <% end %>
+    <%= button_to "⏹ Stop & clear", scraper_stop_path,
+          form: { data: { turbo_confirm: "Stop the scraper, clear all queued jobs, and park every pending target? " \
+                                          "The one plot mid-scrape will finish on its own. Re-seed a search to start again." } },
+          class: "rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700" %>
     <%= link_to "Scraper", search_path, class: "rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700" %>
   </div>
 </div>

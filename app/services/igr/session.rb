@@ -14,7 +14,8 @@ module Igr
   class Session
     BASE_URL = "https://freesearchigrservice.maharashtra.gov.in/".freeze
 
-    EMPTY_CONFIRMATIONS = 5  # blank grids (with a valid-length guess) to trust :empty
+    EMPTY_CONFIRMATIONS = 3  # blank grids (with a valid-length guess) to trust :empty
+    VISION_AFTER_MISSES = 3  # OCR retries before falling back to Claude vision on the captcha
     RESULT_TIMEOUT      = 12 # seconds to poll for the async grid postback
     PAGE_NAV_TIMEOUT    = 25 # seconds for a Page$N postback to re-render (portal is slow)
     PAGE_TIMEOUT        = 45
@@ -308,18 +309,21 @@ module Igr
     def solve_and_submit(max_attempts:)
       valid_empties = 0
       attempt = 0
+      misses = 0
 
       max_attempts.times do
         attempt += 1
         ensure_search_form # recover if the site bounced us to the landing page
         prepare_attempt    # subclass hook: re-assert wiped fields + refresh captcha
-        guess = solve_captcha
-        logger.info("[igr] attempt #{attempt}: captcha=#{guess.inspect}")
+        image = capture_captcha
+        guess = read_captcha(image, misses:)
+        logger.info("[igr] attempt #{attempt}: captcha=#{guess.inspect}#{' (vision)' if misses >= VISION_AFTER_MISSES}")
 
         submit_search(guess)
         rows = wait_for_results
         return Result.new(status: :found, rows:, attempts: attempt) if rows.any?
 
+        misses += 1 # this attempt yielded no rows (wrong captcha, or a genuine empty)
         valid_empties += 1 if Igr::Captcha.valid?(guess)
         return Result.new(status: :empty, rows: [], attempts: attempt) if valid_empties >= EMPTY_CONFIRMATIONS
 
@@ -327,6 +331,19 @@ module Igr
       end
 
       Result.new(status: :empty, rows: [], attempts: attempt)
+    end
+
+    # Read the captcha: free Tesseract OCR first, then — once OCR has missed
+    # VISION_AFTER_MISSES times in a row — fall back to Claude vision on the SAME
+    # captured image. Vision is far more accurate on the hex glyphs, so it
+    # collapses the wrong-captcha retry loop that dominates a slow scrape. Skipped
+    # entirely when no ANTHROPIC_API_KEY is set, so the scraper still runs OCR-only.
+    def read_captcha(image, misses:)
+      if misses >= VISION_AFTER_MISSES && Igr::CaptchaVision.available?
+        vision = Igr::CaptchaVision.solve(image)
+        return vision if Igr::Captcha.valid?(vision)
+      end
+      Igr::Captcha.solve(image)
     end
 
     # The site occasionally bounces back to the landing page after a submit
@@ -358,10 +375,6 @@ module Igr
       end
     rescue Selenium::WebDriver::Error::TimeoutError
       nil
-    end
-
-    def solve_captcha
-      Igr::Captcha.solve(capture_captcha)
     end
 
     # element.screenshot_as(:png) is BLANK in headless; draw the same-origin

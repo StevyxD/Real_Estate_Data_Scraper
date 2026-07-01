@@ -31,6 +31,9 @@ class KhargharScrapesController < ApplicationController
     end
 
     queued = enqueue_range(year, from..to)
+    # Seeding intent = run it: lift any earlier "Stop & clear" pause (no-op if not
+    # paused). enqueue_range already (re)sets each row to pending, reviving parked.
+    Igr::ScrapeControl.resume! if queued.positive?
     redirect_to dashboard_path,
                 notice: "Queued #{queued} Kharghar #{'property'.pluralize(queued)} " \
                         "(##{from}–#{to}, #{year}) for scraping. Run `bin/jobs` to start " \

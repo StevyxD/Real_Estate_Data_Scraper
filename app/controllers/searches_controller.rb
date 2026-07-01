@@ -22,6 +22,10 @@ class SearchesController < ApplicationController
                                error_message: nil)
 
     if property.save
+      # Seeding intent = run it: lift any earlier "Stop & clear" pause so the
+      # dispatcher picks this up (no-op if not paused). The pending assignment
+      # above already revives a previously-parked target.
+      Igr::ScrapeControl.resume!
       redirect_to dashboard_path,
                   notice: "Queued #{property.label} for scraping. Run `bin/jobs` — the dispatcher picks it up within a minute and retries on failure."
     else

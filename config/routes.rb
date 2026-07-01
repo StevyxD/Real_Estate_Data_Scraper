@@ -14,9 +14,10 @@ Rails.application.routes.draw do
   # Live scrape activity + recently scraped documents.
   get "dashboard", to: "dashboard#index", as: :dashboard
 
-  # Pause / resume the scraper (Solid Queue :scraping queue).
+  # Pause / resume / stop the scraper (Solid Queue :scraping queue).
   post "scraper/pause",  to: "scrape_controls#pause",  as: :scraper_pause
   post "scraper/resume", to: "scrape_controls#resume", as: :scraper_resume
+  post "scraper/stop",   to: "scrape_controls#stop",   as: :scraper_stop
 
   # Mumbai property search → queues a scrape.
   get  "search", to: "searches#new",    as: :search
